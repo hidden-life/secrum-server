@@ -1,18 +1,20 @@
 package main
 
 import (
-	"fmt"
-	"log"
-	"os"
+	"github.com/hidden-life/secrum-server/internal/config"
+	"github.com/hidden-life/secrum-server/internal/logger"
+	"github.com/hidden-life/secrum-server/internal/server"
+	"go.uber.org/zap"
 )
 
 func main() {
-	fmt.Println("Starting secrum-server...")
+	cfg := config.LoadConfig()
+	log := logger.New(cfg.ApplicationEnv, cfg.LogLevel)
+	defer log.Sync()
 
-	env := os.Getenv("APP_ENV")
-	if env == "" {
-		env = "dev"
+	// Start a HTTP server
+	srv := server.NewHTTPServer(log, cfg.HTTPPort)
+	if err := srv.Start(); err != nil {
+		log.Fatal("Server start failed", zap.Error(err))
 	}
-
-	log.Printf("Environment: %s", env)
 }
