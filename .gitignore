@@ -1,0 +1,32 @@
+# Go build
+bin/
+*.exe
+*.out
+*.test
+*.log
+
+# Binaries for programs and plugins
+*.dll
+*.so
+*.dylib
+
+# IDE
+.vscode/
+.idea/
+
+# Environment
+.env
+.env.*
+config/*.yaml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Dependencies
+vendor/
+
+# Docker
+docker-data/
+*.pid
+*.tar

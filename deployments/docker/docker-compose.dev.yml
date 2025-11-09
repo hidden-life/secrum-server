@@ -1,0 +1,24 @@
+version: '3.9'
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: 'secrum_postgres'
+    environment:
+      POSTGRES_USER: secrum_user
+      POSTGRES_PASSWORD: secrum_password
+      POSTGRES_DB: secrum_db
+    ports:
+      - '5432:5432'
+    volumes:
+      - ./docker-data/postgres:/var/lib/postgresql/data
+    restart: always
+
+  redis:
+    image: redis:7
+    container_name: 'secrum_redis'
+    ports:
+      - '6379:6379'
+    volumes:
+      - ./docker-data/redis:/data
+    restart: always
