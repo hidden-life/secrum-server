@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
@@ -13,27 +14,42 @@ type HTTPServer struct {
 	router *chi.Mux
 	logger *zap.Logger
 	port   string
+	srv    *http.Server
 }
 
 func NewHTTPServer(logger *zap.Logger, port string) *HTTPServer {
 	r := chi.NewRouter()
 
-	srv := &HTTPServer{
+	s := &HTTPServer{
 		router: r,
 		logger: logger,
 		port:   port,
 	}
 
-	// Register routers
-	r.Get("/healthz", srv.healthHandler)
+	// Register routes
+	r.Get("/healthz", s.healthHandler)
 
-	return srv
+	s.srv = &http.Server{
+		Addr:    ":" + port,
+		Handler: r,
+	}
+
+	return s
+}
+
+func (s *HTTPServer) Router() *chi.Mux {
+	return s.router
 }
 
 func (s *HTTPServer) Start() error {
 	s.logger.Info("Starting HTTP server", zap.String("port", s.port))
 
 	return http.ListenAndServe(":"+s.port, s.router)
+}
+
+func (s *HTTPServer) Stop(ctx context.Context) error {
+	s.logger.Info("Stopping HTTP server")
+	return s.srv.Shutdown(ctx)
 }
 
 func (s *HTTPServer) healthHandler(w http.ResponseWriter, r *http.Request) {
