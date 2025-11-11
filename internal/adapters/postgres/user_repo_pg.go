@@ -18,7 +18,7 @@ type UserPGRepository struct {
 }
 
 // NewRepository creates a new instance of UserPGRepository.
-func NewRepository(p *pgxpool.Pool) ports.UserRepository {
+func NewUserRepository(p *pgxpool.Pool) ports.UserRepository {
 	return &UserPGRepository{pool: p}
 }
 
