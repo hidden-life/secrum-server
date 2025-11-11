@@ -13,6 +13,7 @@ import (
 	"github.com/hidden-life/secrum-server/internal/adapters/postgres"
 	internalRedis "github.com/hidden-life/secrum-server/internal/adapters/redis"
 	"github.com/hidden-life/secrum-server/internal/app/auth"
+	"github.com/hidden-life/secrum-server/internal/app/keys"
 	"github.com/hidden-life/secrum-server/internal/config"
 	"github.com/hidden-life/secrum-server/internal/logger"
 	"github.com/hidden-life/secrum-server/internal/server"
@@ -42,6 +43,9 @@ func main() {
 	}
 	defer pool.Close()
 
+	keyRepository := postgres.NewKeyRepository(pool)
+	keyService := keys.NewService(log, keyRepository)
+
 	// Repositories
 	userRepo := postgres.NewUserRepository(pool)
 	deviceRepo := postgres.NewDeviceRepository(pool)
@@ -65,6 +69,7 @@ func main() {
 	// Start a HTTP server
 	srv := server.NewHTTPServer(log, cfg.HTTPPort)
 	http.RegisterAuthRoutes(srv.Router(), authSvc)
+	http.RegisterKeyRoutes(srv.Router(), keyService)
 
 	// Start server async
 	go func() {
