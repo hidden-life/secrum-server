@@ -7,6 +7,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/hidden-life/secrum-server/internal/adapters/http"
 	"github.com/hidden-life/secrum-server/internal/adapters/jwt"
 	"github.com/hidden-life/secrum-server/internal/adapters/otp"
@@ -14,6 +15,7 @@ import (
 	internalRedis "github.com/hidden-life/secrum-server/internal/adapters/redis"
 	"github.com/hidden-life/secrum-server/internal/app/auth"
 	"github.com/hidden-life/secrum-server/internal/app/keys"
+	"github.com/hidden-life/secrum-server/internal/app/messages"
 	"github.com/hidden-life/secrum-server/internal/config"
 	"github.com/hidden-life/secrum-server/internal/logger"
 	"github.com/hidden-life/secrum-server/internal/server"
@@ -68,9 +70,21 @@ func main() {
 
 	// Start a HTTP server
 	srv := server.NewHTTPServer(log, cfg.HTTPPort)
+
+	// message repository
+	msgRepo := postgres.NewMessageRepository(pool)
+	msgSvc := messages.NewService(log, msgRepo, userRepo)
+
+	// auth middleware
+	authMW := http.AuthMiddleware(tokenManager)
+
+	// Register new routes
 	http.RegisterAuthRoutes(srv.Router(), authSvc)
 	http.RegisterKeyRoutes(srv.Router(), keyService)
-
+	srv.Router().Group(func(r chi.Router) {
+		r.Use(authMW)
+		http.RegisterMessagesRoutes(r, msgSvc)
+	})
 	// Start server async
 	go func() {
 		if err := srv.Start(); err != nil {
