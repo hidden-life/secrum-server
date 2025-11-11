@@ -3,7 +3,6 @@ package postgres
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"github.com/google/uuid"
 	"github.com/hidden-life/secrum-server/internal/domain/user"
@@ -41,8 +40,8 @@ func (r *UserPGRepository) GetByPhoneHash(ctx context.Context, hash string) (*us
 	row := r.pool.QueryRow(ctx, q, hash)
 	var u user.User
 	if err := row.Scan(&u.ID, &u.PhoneHash, &u.CreatedAt, &u.UpdatedAt, &u.IsActive); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, fmt.Errorf("no results found")
+		if err == pgx.ErrNoRows {
+			return nil, nil
 		}
 		return nil, err
 	}

@@ -3,7 +3,6 @@ package http
 import (
 	"encoding/json"
 	"net/http"
-	"os"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/hidden-life/secrum-server/internal/app/auth"
@@ -24,8 +23,7 @@ func beginHandler(svc *auth.Service) http.HandlerFunc {
 			return
 		}
 
-		devExpose := os.Getenv("APP_ENV") != "production"
-		resp, err := svc.BeginRegistration(r.Context(), req, devExpose)
+		resp, err := svc.BeginRegistration(r.Context(), req)
 		if err != nil {
 			asError(w, http.StatusBadRequest, err.Error())
 			return

@@ -8,7 +8,9 @@ import (
 	"time"
 
 	"github.com/hidden-life/secrum-server/internal/adapters/http"
+	"github.com/hidden-life/secrum-server/internal/adapters/jwt"
 	"github.com/hidden-life/secrum-server/internal/adapters/otp"
+	"github.com/hidden-life/secrum-server/internal/adapters/postgres"
 	internalRedis "github.com/hidden-life/secrum-server/internal/adapters/redis"
 	"github.com/hidden-life/secrum-server/internal/app/auth"
 	"github.com/hidden-life/secrum-server/internal/config"
@@ -23,6 +25,8 @@ func main() {
 	log := logger.New(cfg.ApplicationEnv, cfg.LogLevel)
 	defer log.Sync()
 
+	ctx := context.Background()
+
 	// Init redis
 	rdb := redis.NewClient(&redis.Options{
 		Addr: cfg.RedisAddress,
@@ -31,17 +35,38 @@ func main() {
 		log.Warn("Failed to connect to Redis", zap.Error(err))
 	}
 
+	// Init postgresql
+	pool, err := postgres.NewPool(ctx, cfg.DatabaseURL)
+	if err != nil {
+		log.Fatal("Failed to connect to Postgres", zap.Error(err))
+	}
+	defer pool.Close()
+
+	// Repositories
+	userRepo := postgres.NewUserRepository(pool)
+	deviceRepo := postgres.NewDeviceRepository(pool)
+
 	// OTP store + provider
 	otpStore := internalRedis.New(rdb)
 	otpProvider := otp.NewMockProvider(log, cfg.ApplicationEnv)
 
+	// Token manager (JWT)
+	tokenManager := jwt.NewManager(
+		cfg.JWTAccessSecret,
+		cfg.JWTRefreshSecret,
+		cfg.ApplicationName,
+		cfg.JWTAccessTTLMinutes,
+		cfg.JWTRefreshTTLMinutes,
+	)
+
 	// Auth service
-	authSvc := auth.NewService(log, otpStore, otpProvider)
+	authSvc := auth.NewService(log, cfg.ApplicationEnv, otpStore, otpProvider, userRepo, deviceRepo, tokenManager)
 
 	// Start a HTTP server
 	srv := server.NewHTTPServer(log, cfg.HTTPPort)
 	http.RegisterAuthRoutes(srv.Router(), authSvc)
 
+	// Start server async
 	go func() {
 		if err := srv.Start(); err != nil {
 			log.Fatal("Failed to start HTTP server", zap.Error(err))
@@ -52,14 +77,15 @@ func main() {
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	<-stop
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if err := srv.Stop(ctx); err != nil {
+	if err := srv.Stop(shutdownCtx); err != nil {
 		log.Warn("HTTP server shutdown error", zap.Error(err))
 	}
+	if err := rdb.Close(); err != nil {
+		log.Warn("Redis client close error", zap.Error(err))
+	}
 
-	log.Info("Shutting down server...")
-
-	_ = rdb.Close()
+	log.Info("SecRum server stopped")
 }
