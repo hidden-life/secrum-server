@@ -14,6 +14,9 @@ type Device struct {
 	CreatedAt time.Time
 	LastSeen  time.Time
 
+	RefreshTokenHash      string
+	RefreshTokenExpiresAt *time.Time
+
 	IsActive bool
 }
 

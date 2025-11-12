@@ -10,4 +10,5 @@ type TokenPair struct {
 type TokenManager interface {
 	Generate(context.Context, string, string) (*TokenPair, error)
 	ValidateAccess(context.Context, string) (userID string, deviceID string, err error)
+	ValidateRefresh(context.Context, string) (userID string, deviceID string, err error)
 }

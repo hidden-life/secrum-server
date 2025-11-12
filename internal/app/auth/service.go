@@ -5,9 +5,12 @@ import (
 	"crypto/rand"
 	"fmt"
 	"regexp"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/hidden-life/secrum-server/internal/domain/device"
 	"github.com/hidden-life/secrum-server/internal/domain/user"
+	"github.com/hidden-life/secrum-server/internal/pkg/crypto"
 	"github.com/hidden-life/secrum-server/internal/ports"
 	"go.uber.org/zap"
 )
@@ -19,8 +22,18 @@ type Service struct {
 	userRepo    ports.UserRepository
 	deviceRepo  ports.DeviceRepository
 	tokenIssuer ports.TokenManager
+	refreshTTL  time.Duration
 
 	env string
+}
+
+type RefreshRequest struct {
+	RefreshToken string `json:"refresh_token"`
+}
+
+type RefreshResponse struct {
+	RefreshToken string `json:"refresh_token"`
+	AccessToken  string `json:"access_token"`
 }
 
 func NewService(
@@ -40,6 +53,7 @@ func NewService(
 		deviceRepo:  deviceRepo,
 		tokenIssuer: tokenIssuer,
 		env:         env,
+		refreshTTL:  30 * 24 * time.Hour, // 30 days token lifetime
 	}
 }
 
@@ -139,6 +153,12 @@ func (s *Service) VerifyRegistration(ctx context.Context, req VerifyRegistration
 		return nil, fmt.Errorf("failed to generate tokens: %w", err)
 	}
 
+	hash := crypto.Sha256Hex(tokens.RefreshToken)
+	exp := time.Now().UTC().Add(s.refreshTTL)
+	if err := s.deviceRepo.UpdateRefreshToken(ctx, dev.ID, hash, &exp); err != nil {
+		s.log.Warn("failed to persist refresh token", zap.Error(err))
+	}
+
 	s.log.Info("User authenticated", zap.String("user_id", u.ID.String()), zap.String("device_id", dev.ID.String()))
 
 	return &VerifyRegistrationResponse{
@@ -148,6 +168,64 @@ func (s *Service) VerifyRegistration(ctx context.Context, req VerifyRegistration
 		AccessToken:  tokens.AccessToken,
 		RefreshToken: tokens.RefreshToken,
 	}, nil
+}
+
+func (s *Service) Refresh(ctx context.Context, req RefreshRequest) (*RefreshResponse, error) {
+	if req.RefreshToken == "" {
+		return nil, fmt.Errorf("refresh_token is required")
+	}
+
+	userID, deviceId, err := s.tokenIssuer.ValidateRefresh(ctx, req.RefreshToken)
+	if err != nil {
+		return nil, fmt.Errorf("failed to validate refresh token: %w", err)
+	}
+
+	devUUID, _ := uuid.Parse(deviceId)
+	dev, err := s.deviceRepo.GetById(ctx, devUUID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get device: %w", err)
+	}
+
+	if dev == nil || !dev.IsActive {
+		return nil, fmt.Errorf("device not active or missing")
+	}
+
+	want := crypto.Sha256Hex(req.RefreshToken)
+	if dev.RefreshTokenHash != want {
+		return nil, fmt.Errorf("refresh token mismatch")
+	}
+	if dev.RefreshTokenExpiresAt != nil && time.Now().UTC().After(*dev.RefreshTokenExpiresAt) {
+		return nil, fmt.Errorf("refresh token expired")
+	}
+
+	pair, err := s.tokenIssuer.Generate(ctx, userID, deviceId)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate token pair: %w", err)
+	}
+
+	newHash := crypto.Sha256Hex(pair.RefreshToken)
+	newExp := time.Now().UTC().Add(s.refreshTTL)
+	_ = s.deviceRepo.UpdateRefreshToken(ctx, dev.ID, newHash, &newExp)
+	_ = s.deviceRepo.UpdateLastSeen(ctx, devUUID, time.Now().UTC())
+
+	return &RefreshResponse{
+		AccessToken:  pair.AccessToken,
+		RefreshToken: pair.RefreshToken,
+	}, nil
+}
+
+func (s *Service) Logout(ctx context.Context, deviceID string) error {
+	devUUID, err := uuid.Parse(deviceID)
+	if err != nil {
+		return fmt.Errorf("failed to parse device UUID: %w", err)
+	}
+
+	if err := s.deviceRepo.ClearRefreshToken(ctx, devUUID); err != nil {
+		return fmt.Errorf("failed to clear refresh token: %w", err)
+	}
+
+	_ = s.deviceRepo.UpdateLastSeen(ctx, devUUID, time.Now().UTC())
+	return nil
 }
 
 func normalizePhone(phone string) string {

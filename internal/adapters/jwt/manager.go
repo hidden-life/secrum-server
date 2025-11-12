@@ -38,7 +38,7 @@ func (m *Manager) Generate(_ context.Context, userID, deviceID string) (*ports.T
 		"iss":    m.issuer,
 		"iat":    now.Unix(),
 		"exp":    now.Add(m.accessTTL).Unix(),
-		"type":   "access_token",
+		"typ":    "access_token",
 	})
 	accessStr, err := accessToken.SignedString(m.accessSecret)
 	if err != nil {
@@ -51,7 +51,7 @@ func (m *Manager) Generate(_ context.Context, userID, deviceID string) (*ports.T
 		"iss":    m.issuer,
 		"iat":    now.Unix(),
 		"exp":    now.Add(m.refreshTTL).Unix(),
-		"type":   "refresh_token",
+		"typ":    "refresh_token",
 	})
 	refreshStr, err := refreshToken.SignedString(m.refreshSecret)
 	if err != nil {
@@ -81,6 +81,38 @@ func (m *Manager) ValidateAccess(_ context.Context, accessToken string) (userID 
 	claims, isOk := token.Claims.(jwtLib.MapClaims)
 	if !isOk {
 		return "", "", errors.New("invalid claims")
+	}
+
+	userID, _ = claims["sub"].(string)
+	deviceID, _ = claims["device"].(string)
+	if userID == "" || deviceID == "" {
+		return "", "", errors.New("missing required claims")
+	}
+
+	return userID, deviceID, nil
+}
+
+func (m *Manager) ValidateRefresh(_ context.Context, refreshToken string) (userID string, deviceID string, err error) {
+	token, err := jwtLib.Parse(refreshToken, func(token *jwtLib.Token) (interface{}, error) {
+		if token.Method != jwtLib.SigningMethodHS256 {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+
+		return m.refreshSecret, nil
+	})
+
+	if err != nil || !token.Valid {
+		return "", "", errors.New("invalid refresh token")
+	}
+
+	claims, isOk := token.Claims.(jwtLib.MapClaims)
+	if !isOk {
+		return "", "", errors.New("invalid claims")
+	}
+
+	typ, _ := claims["typ"].(string)
+	if typ != "refresh_token" {
+		return "", "", errors.New("invalid token type")
 	}
 
 	userID, _ = claims["sub"].(string)
