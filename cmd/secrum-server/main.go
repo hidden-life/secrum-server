@@ -46,7 +46,8 @@ func main() {
 	defer pool.Close()
 
 	keyRepository := postgres.NewKeyRepository(pool)
-	keyService := keys.NewService(log, keyRepository)
+	otpkRepo := postgres.NewOTPKRepository(pool)
+	keyService := keys.NewService(log, keyRepository, otpkRepo)
 
 	// Repositories
 	userRepo := postgres.NewUserRepository(pool)
@@ -80,7 +81,7 @@ func main() {
 
 	// Register new routes
 	http.RegisterAuthRoutes(srv.Router(), authSvc)
-	http.RegisterKeyRoutes(srv.Router(), keyService)
+	http.RegisterKeyRoutes(srv.Router(), keyService, tokenManager)
 	srv.Router().Group(func(r chi.Router) {
 		r.Use(authMW)
 		http.RegisterMessagesRoutes(r, msgSvc)
