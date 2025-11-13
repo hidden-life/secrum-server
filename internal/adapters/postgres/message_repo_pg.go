@@ -74,3 +74,15 @@ func (m *MessageRepositoryPG) MarkDelivered(ctx context.Context, ids []uuid.UUID
 
 	return err
 }
+
+func (m *MessageRepositoryPG) MarkRead(ctx context.Context, ids []uuid.UUID) error {
+	if len(ids) == 0 {
+		return nil
+	}
+
+	const q = `UPDATE messages SET read_at = $2 WHERE id = ANY($1) AND read_at IS NULL`
+	now := time.Now().UTC()
+	_, err := m.pool.Exec(ctx, q, ids, now)
+
+	return err
+}

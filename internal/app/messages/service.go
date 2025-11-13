@@ -43,7 +43,8 @@ type PendingMessage struct {
 
 // AckRequest contains message IDs to mark as delivered
 type AckRequest struct {
-	MessageIDs []string `json:"message_ids"`
+	Delivered []string `json:"delivered,omitempty"`
+	Read      []string `json:"read,omitempty"`
 }
 
 func NewService(log *zap.Logger, msgRepository ports.MessageRepository, userRepository ports.UserRepository) *Service {
@@ -132,21 +133,41 @@ func (s *Service) FetchPending(ctx context.Context, deviceID string, limit int) 
 }
 
 func (s *Service) AckDelivered(ctx context.Context, deviceID string, req AckRequest) error {
-	if len(req.MessageIDs) == 0 {
-		return nil
-	}
+	if len(req.Delivered) > 0 {
+		var ids []uuid.UUID
+		for _, str := range req.Delivered {
+			id, err := uuid.Parse(str)
+			if err != nil {
+				return fmt.Errorf("invalid delivered message id: %w", err)
+			}
 
-	var ids []uuid.UUID
-	for _, idStr := range req.MessageIDs {
-		id, err := uuid.Parse(idStr)
-		if err != nil {
-			return fmt.Errorf("invalid message id: %w", err)
+			ids = append(ids, id)
 		}
-		ids = append(ids, id)
+
+		if err := s.msgRepository.MarkDelivered(ctx, ids); err != nil {
+			return fmt.Errorf("failed to mark delivered messages: %w", err)
+		}
 	}
 
-	if err := s.msgRepository.MarkDelivered(ctx, ids); err != nil {
-		return fmt.Errorf("failed to mark delivered message: %w", err)
+	if len(req.Read) > 0 {
+		var ids []uuid.UUID
+		for _, str := range req.Read {
+			id, err := uuid.Parse(str)
+			if err != nil {
+				return fmt.Errorf("invalid read message id: %w", err)
+			}
+			ids = append(ids, id)
+		}
+
+		if repo, isOk := s.msgRepository.(interface {
+			MarkRead(ctx context.Context, ids []uuid.UUID) error
+		}); isOk {
+			if err := repo.MarkRead(ctx, ids); err != nil {
+				return fmt.Errorf("failed to mark read messages: %w", err)
+			}
+		} else {
+			s.log.Warn("msgRepository does not implement MarkRead(...)")
+		}
 	}
 
 	return nil
