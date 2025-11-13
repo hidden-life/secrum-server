@@ -1,6 +1,6 @@
 CREATE TABLE IF NOT EXISTS messages (
-                                        id UUID PRIMARY KEY,
-                                        sender_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    id UUID PRIMARY KEY,
+    sender_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     sender_device_id UUID NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
     recipient_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     recipient_device_id UUID NOT NULL REFERENCES devices(id) ON DELETE CASCADE,

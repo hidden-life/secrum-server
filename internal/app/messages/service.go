@@ -19,9 +19,10 @@ type Service struct {
 
 // SendRequest is input for sending message
 type SendRequest struct {
-	RecipientUserID   string `json:"recipient_user_id"`
-	RecipientDeviceID string `json:"recipient_device_id"`
-	CipherText        string `json:"cipher_text"`
+	RecipientUserID   string  `json:"recipient_user_id"`
+	RecipientDeviceID string  `json:"recipient_device_id"`
+	CipherText        string  `json:"cipher_text"`
+	X3DHOTPKID        *string `json:"x3dh_otpk_id,omitempty"`
 }
 
 // SendResponse contains created message ID.
@@ -76,8 +77,18 @@ func (s *Service) Send(ctx context.Context, sUserID, sDeviceID string, req *Send
 		return nil, fmt.Errorf("invalid recipient device id: %w", err)
 	}
 
+	var otpkUUID *uuid.UUID
+	if req.X3DHOTPKID != nil && *req.X3DHOTPKID != "" {
+		id, err := uuid.Parse(*req.X3DHOTPKID)
+		if err != nil {
+			return nil, fmt.Errorf("invalid x3dh_otpk_id: %w", err)
+		}
+		otpkUUID = &id
+	}
+
 	// Optionally: we can check receiver (user) using userRepository (TODO)
 	msg := message.New(senderUserID, senderDeviceID, recipientUserID, recipientDeviceID, req.CipherText)
+	msg.X3DHOTPKID = otpkUUID
 
 	if err := s.msgRepository.Save(ctx, msg); err != nil {
 		return nil, fmt.Errorf("failed to save message: %w", err)

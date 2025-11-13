@@ -17,6 +17,8 @@ type Message struct {
 	CreatedAt   time.Time
 	DeliveredAt *time.Time
 	ReadAt      *time.Time
+
+	X3DHOTPKID *uuid.UUID
 }
 
 func New(senderUserID, senderDeviceID, recipientUserID, recipientDeviceID uuid.UUID, msg string) *Message {

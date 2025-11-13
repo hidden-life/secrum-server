@@ -19,8 +19,8 @@ func NewMessageRepository(pool *pgxpool.Pool) ports.MessageRepository {
 }
 
 func (m *MessageRepositoryPG) Save(ctx context.Context, msg *message.Message) error {
-	const q = `INSERT INTO messages (id, sender_user_id, sender_device_id, recipient_user_id, recipient_device_id, ciphertext, created_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7)`
+	const q = `INSERT INTO messages (id, sender_user_id, sender_device_id, recipient_user_id, recipient_device_id, ciphertext, x3dh_otpk_id, created_at)
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
 
 	_, err := m.pool.Exec(ctx, q,
 		msg.ID,
@@ -29,6 +29,7 @@ VALUES ($1, $2, $3, $4, $5, $6, $7)`
 		msg.RecipientUserID,
 		msg.RecipientDeviceID,
 		msg.CipherText,
+		msg.X3DHOTPKID,
 		msg.CreatedAt,
 	)
 
@@ -51,7 +52,7 @@ LIMIT $2`
 	var output []*message.Message
 	for rows.Next() {
 		var m message.Message
-		err := rows.Scan(&m.ID, &m.SenderUserID, &m.SenderDeviceID, &m.RecipientUserID, &m.RecipientDeviceID, &m.CipherText, &m.CreatedAt, &m.DeliveredAt, &m.ReadAt)
+		err := rows.Scan(&m.ID, &m.SenderUserID, &m.SenderDeviceID, &m.RecipientUserID, &m.RecipientDeviceID, &m.CipherText, &m.CreatedAt, &m.DeliveredAt, &m.ReadAt, &m.X3DHOTPKID)
 		if err != nil {
 			return nil, err
 		}
