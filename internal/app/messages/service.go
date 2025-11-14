@@ -23,6 +23,7 @@ type SendRequest struct {
 	RecipientDeviceID string  `json:"recipient_device_id"`
 	CipherText        string  `json:"cipher_text"`
 	X3DHOTPKID        *string `json:"x3dh_otpk_id,omitempty"`
+	PubKey            *string `json:"pub_key,omitempty"`
 }
 
 // SendResponse contains created message ID.
@@ -90,6 +91,10 @@ func (s *Service) Send(ctx context.Context, sUserID, sDeviceID string, req *Send
 	// Optionally: we can check receiver (user) using userRepository (TODO)
 	msg := message.New(senderUserID, senderDeviceID, recipientUserID, recipientDeviceID, req.CipherText)
 	msg.X3DHOTPKID = otpkUUID
+
+	if req.PubKey != nil {
+		msg.PubKey = *req.PubKey
+	}
 
 	if err := s.msgRepository.Save(ctx, msg); err != nil {
 		return nil, fmt.Errorf("failed to save message: %w", err)

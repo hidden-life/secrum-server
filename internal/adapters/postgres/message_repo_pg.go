@@ -19,7 +19,16 @@ func NewMessageRepository(pool *pgxpool.Pool) ports.MessageRepository {
 }
 
 func (m *MessageRepositoryPG) Save(ctx context.Context, msg *message.Message) error {
-	const q = `INSERT INTO messages (id, sender_user_id, sender_device_id, recipient_user_id, recipient_device_id, ciphertext, x3dh_otpk_id, created_at)
+	const q = `INSERT INTO messages (
+                      id, 
+                      sender_user_id, 
+                      sender_device_id, 
+                      recipient_user_id,
+                      recipient_device_id, 
+                      ciphertext, 
+                      x3dh_otpk_id, 
+                      ephemeral_pub_key,
+                      created_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
 
 	_, err := m.pool.Exec(ctx, q,
@@ -30,6 +39,7 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
 		msg.RecipientDeviceID,
 		msg.CipherText,
 		msg.X3DHOTPKID,
+		msg.PubKey,
 		msg.CreatedAt,
 	)
 
@@ -38,7 +48,18 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
 
 func (m *MessageRepositoryPG) GetPendingByRecipientDevice(ctx context.Context, deviceID uuid.UUID, limit int) ([]*message.Message, error) {
 	const q = `
-SELECT * FROM messages
+SELECT id, 
+       sender_user_id, 
+       sender_device_id, 
+       recipient_user_id, 
+       recipient_device_id, 
+       ciphertext,
+       created_at,
+       delivered_at,
+       read_at,
+       x3dh_otpk_id,
+       ephemeral_pub_key
+FROM messages
 WHERE recipient_device_id = $1 AND delivered_at IS NULL
 ORDER BY created_at ASC
 LIMIT $2`
@@ -52,7 +73,19 @@ LIMIT $2`
 	var output []*message.Message
 	for rows.Next() {
 		var m message.Message
-		err := rows.Scan(&m.ID, &m.SenderUserID, &m.SenderDeviceID, &m.RecipientUserID, &m.RecipientDeviceID, &m.CipherText, &m.CreatedAt, &m.DeliveredAt, &m.ReadAt, &m.X3DHOTPKID)
+		err := rows.Scan(
+			&m.ID,
+			&m.SenderUserID,
+			&m.SenderDeviceID,
+			&m.RecipientUserID,
+			&m.RecipientDeviceID,
+			&m.CipherText,
+			&m.CreatedAt,
+			&m.DeliveredAt,
+			&m.ReadAt,
+			&m.X3DHOTPKID,
+			&m.PubKey,
+		)
 		if err != nil {
 			return nil, err
 		}
