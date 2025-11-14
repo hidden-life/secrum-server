@@ -29,7 +29,7 @@ func (m *MessageRepositoryPG) Save(ctx context.Context, msg *message.Message) er
                       x3dh_otpk_id, 
                       ephemeral_pub_key,
                       created_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
 
 	_, err := m.pool.Exec(ctx, q,
 		msg.ID,
