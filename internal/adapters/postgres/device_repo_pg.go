@@ -22,7 +22,7 @@ func NewDeviceRepository(p *pgxpool.Pool) *DeviceRepositoryPG {
 // Create inserts a new device record into the database.
 func (r *DeviceRepositoryPG) Create(ctx context.Context, d *device.Device) error {
 	const q = `
-INSERT INTO devices (id, user_id, name, platform, created_at, last_seen, refresh_token_hash, refresh_expires_at, is_active) 
+INSERT INTO devices (id, user_id, name, platform, created_at, last_seen, refresh_token_hash, refresh_token_expires_at, is_active) 
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
 
 	_, err := r.pool.Exec(ctx, q, d.ID, d.UserID, d.Name, d.Platform, d.CreatedAt, d.LastSeen, d.RefreshTokenHash, d.RefreshTokenExpiresAt, d.IsActive)
@@ -31,7 +31,7 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
 }
 
 func (r *DeviceRepositoryPG) GetById(ctx context.Context, deviceID uuid.UUID) (*device.Device, error) {
-	const q = `SELECT id, user_id, name, platform, created_at, updated_at, is_active, refresh_token_hash, refresh_expires_at FROM devices WHERE id = $1`
+	const q = `SELECT id, user_id, name, platform, created_at, updated_at, is_active, refresh_token_hash, refresh_token_expires_at FROM devices WHERE id = $1`
 	row := r.pool.QueryRow(ctx, q, deviceID)
 	var d device.Device
 
