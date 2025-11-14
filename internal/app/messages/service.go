@@ -39,6 +39,7 @@ type PendingMessage struct {
 	RecipientUserID   string `json:"recipient_user_id"`
 	RecipientDeviceID string `json:"recipient_device_id"`
 	CipherText        string `json:"cipher_text"`
+	PubKey            string `json:"pub_key"`
 	CreatedAt         string `json:"created_at"`
 }
 
@@ -131,6 +132,7 @@ func (s *Service) FetchPending(ctx context.Context, deviceID string, limit int) 
 			CipherText:        m.CipherText,
 			RecipientDeviceID: m.RecipientDeviceID.String(),
 			CreatedAt:         m.CreatedAt.Format(time.RFC3339Nano),
+			PubKey:            m.PubKey,
 		})
 	}
 
