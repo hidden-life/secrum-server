@@ -19,24 +19,40 @@ func NewKeyRepository(pool *pgxpool.Pool) ports.KeyRepository {
 
 func (k *KeyRepositoryPG) Save(ctx context.Context, kb *keybundle.KeyBundle) error {
 	const q = `
-	INSERT INTO key_bundles (id, device_id, identity_key, signed_prekey, one_time_prekeys, created_at)
-	VALUES ($1, $2, $3, $4, $5, $6)
+	INSERT INTO key_bundles (
+	                         id, 
+	                         device_id, 
+	                         identity_key, 
+	                         signed_prekey, 
+	                         signed_prekey_sig,
+	                         one_time_prekeys, 
+	                         created_at
+	                         ) VALUES ($1, $2, $3, $4, $5, $6, $7)
 	ON CONFLICT (device_id) DO UPDATE SET
 	identity_key = EXCLUDED.identity_key,
 	signed_prekey = EXCLUDED.signed_prekey,
 	one_time_prekeys = EXCLUDED.one_time_prekeys,
-	created_at = EXCLUDED.created_at`
+	created_at = EXCLUDED.created_at,
+	signed_prekey_sig = EXCLUDED.signed_prekey_sig`
 
-	_, err := k.pool.Exec(ctx, q, kb.ID, kb.DeviceID, kb.IdentityKey, kb.SignedPreKey, kb.OneTimePreKeys, kb.CreatedAt)
+	_, err := k.pool.Exec(ctx, q, kb.ID, kb.DeviceID, kb.IdentityKey, kb.SignedPreKey, kb.SignedPreKeySignature, kb.OneTimePreKeys, kb.CreatedAt)
 
 	return err
 }
 
 func (k *KeyRepositoryPG) GetByDeviceID(ctx context.Context, deviceID uuid.UUID) (*keybundle.KeyBundle, error) {
-	const q = `SELECT * FROM key_bundles WHERE device_id = $1`
+	const q = `SELECT 
+    id, 
+    device_id, 
+    identity_key, 
+    signed_prekey, 
+    signed_prekey_sig, 
+    one_time_prekeys, 
+    created_at
+FROM key_bundles WHERE device_id = $1`
 	row := k.pool.QueryRow(ctx, q, deviceID)
 	var kb keybundle.KeyBundle
-	if err := row.Scan(&kb.ID, &kb.DeviceID, &kb.IdentityKey, &kb.SignedPreKey, &kb.OneTimePreKeys, &kb.CreatedAt); err != nil {
+	if err := row.Scan(&kb.ID, &kb.DeviceID, &kb.IdentityKey, &kb.SignedPreKey, &kb.SignedPreKeySignature, &kb.OneTimePreKeys, &kb.CreatedAt); err != nil {
 		return nil, err
 	}
 

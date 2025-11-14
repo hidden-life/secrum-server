@@ -18,10 +18,11 @@ type Service struct {
 }
 
 type UploadRequest struct {
-	DeviceID       string   `json:"device_id"`
-	IdentityKey    string   `json:"identity_key"`
-	SignedPreKey   string   `json:"signed_prekey"`
-	OneTimePreKeys []string `json:"one_time_prekeys"`
+	DeviceID        string   `json:"device_id"`
+	IdentityKey     string   `json:"identity_key"`
+	SignedPreKey    string   `json:"signed_prekey"`
+	OneTimePreKeys  []string `json:"one_time_prekeys"`
+	SignedPreKeySig string   `json:"signed_prekey_sig,omitempty"`
 }
 
 type UploadResponse struct {
@@ -34,11 +35,12 @@ type PreKeyBundleRequest struct {
 }
 
 type PreKeyBundleResponse struct {
-	UserID        string `json:"user_id"`
-	DeviceID      string `json:"device_id"`
-	IdentityKey   string `json:"identity_key"`
-	SignedPreKey  string `json:"signed_prekey"`
-	OneTimePreKey *struct {
+	UserID          string `json:"user_id"`
+	DeviceID        string `json:"device_id"`
+	IdentityKey     string `json:"identity_key"`
+	SignedPreKey    string `json:"signed_prekey"`
+	SignedPreKeySig string `json:"signed_prekey_sig,omitempty"`
+	OneTimePreKey   *struct {
 		ID        string `json:"id"`
 		PublicKey string `json:"public_key"`
 	} `json:"one_time_prekey,omitempty"`
@@ -62,7 +64,7 @@ func (s *Service) Upload(ctx context.Context, req UploadRequest) (*UploadRespons
 		return nil, fmt.Errorf("invalid device ID: %w", err)
 	}
 
-	kb := keybundle.New(deviceID, req.IdentityKey, req.SignedPreKey, req.OneTimePreKeys)
+	kb := keybundle.New(deviceID, req.IdentityKey, req.SignedPreKey, req.SignedPreKeySig, req.OneTimePreKeys)
 	if err := s.repository.Save(ctx, kb); err != nil {
 		return nil, fmt.Errorf("failed to save key bundle: %w", err)
 	}
@@ -127,10 +129,11 @@ func (s *Service) PreKeyBundle(ctx context.Context, req *PreKeyBundleRequest) (*
 	}
 
 	resp := &PreKeyBundleResponse{
-		UserID:       req.UserID,
-		DeviceID:     req.DeviceID,
-		IdentityKey:  kb.IdentityKey,
-		SignedPreKey: kb.SignedPreKey,
+		UserID:          req.UserID,
+		DeviceID:        req.DeviceID,
+		IdentityKey:     kb.IdentityKey,
+		SignedPreKey:    kb.SignedPreKey,
+		SignedPreKeySig: kb.SignedPreKeySignature,
 	}
 
 	if otpk != nil {
