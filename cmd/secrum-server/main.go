@@ -16,6 +16,7 @@ import (
 	"github.com/hidden-life/secrum-server/internal/app/auth"
 	"github.com/hidden-life/secrum-server/internal/app/keys"
 	"github.com/hidden-life/secrum-server/internal/app/messages"
+	"github.com/hidden-life/secrum-server/internal/app/profile"
 	"github.com/hidden-life/secrum-server/internal/config"
 	"github.com/hidden-life/secrum-server/internal/logger"
 	"github.com/hidden-life/secrum-server/internal/server"
@@ -79,12 +80,16 @@ func main() {
 	// auth middleware
 	authMW := http.AuthMiddleware(tokenManager)
 
+	// user profile
+	profileSvc := profile.NewService(log, userRepo)
 	// Register new routes
 	http.RegisterAuthRoutes(srv.Router(), authSvc)
 	http.RegisterKeyRoutes(srv.Router(), keyService, tokenManager)
+	
 	srv.Router().Group(func(r chi.Router) {
 		r.Use(authMW)
 		http.RegisterMessagesRoutes(r, msgSvc)
+		http.RegisterProfileRoutes(r, profileSvc)
 	})
 	// Start server async
 	go func() {

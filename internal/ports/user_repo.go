@@ -11,4 +11,5 @@ type UserRepository interface {
 	GetByID(context.Context, uuid.UUID) (*user.User, error)
 	GetByPhoneHash(context.Context, string) (*user.User, error)
 	Create(context.Context, *user.User) error
+	UpdateProfile(context.Context, *user.User) error
 }

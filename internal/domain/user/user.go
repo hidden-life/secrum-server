@@ -9,6 +9,11 @@ import (
 type User struct {
 	ID uuid.UUID
 
+	DisplayName       *string
+	AvatarURL         *string
+	StatusMessage     *string
+	SafetyFingerprint *string
+
 	PhoneHash string
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -27,4 +32,16 @@ func New(hash string) *User {
 
 		IsActive: true,
 	}
+}
+
+func (u *User) UpdateProfile(displayName, avatarURL, statusMessage *string) {
+	u.DisplayName = displayName
+	u.AvatarURL = avatarURL
+	u.StatusMessage = statusMessage
+	u.UpdatedAt = time.Now().UTC()
+}
+
+func (u *User) SetSafetyFingerprint(fp string) {
+	u.SafetyFingerprint = &fp
+	u.UpdatedAt = time.Now().UTC()
 }
