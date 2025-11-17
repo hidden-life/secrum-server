@@ -14,6 +14,7 @@ import (
 	"github.com/hidden-life/secrum-server/internal/adapters/postgres"
 	internalRedis "github.com/hidden-life/secrum-server/internal/adapters/redis"
 	"github.com/hidden-life/secrum-server/internal/app/auth"
+	"github.com/hidden-life/secrum-server/internal/app/contact"
 	"github.com/hidden-life/secrum-server/internal/app/keys"
 	"github.com/hidden-life/secrum-server/internal/app/messages"
 	"github.com/hidden-life/secrum-server/internal/app/profile"
@@ -85,7 +86,12 @@ func main() {
 	// Register new routes
 	http.RegisterAuthRoutes(srv.Router(), authSvc)
 	http.RegisterKeyRoutes(srv.Router(), keyService, tokenManager)
-	
+
+	// Contacts
+	contactRepo := postgres.NewContactRepository(pool)
+	contactSvc := contact.NewService(userRepo, contactRepo)
+	http.RegisterContactRoutes(srv.Router(), contactSvc)
+
 	srv.Router().Group(func(r chi.Router) {
 		r.Use(authMW)
 		http.RegisterMessagesRoutes(r, msgSvc)
