@@ -14,6 +14,7 @@ import (
 	"github.com/hidden-life/secrum-server/internal/adapters/postgres"
 	internalRedis "github.com/hidden-life/secrum-server/internal/adapters/redis"
 	"github.com/hidden-life/secrum-server/internal/app/auth"
+	"github.com/hidden-life/secrum-server/internal/app/chats"
 	"github.com/hidden-life/secrum-server/internal/app/contact"
 	"github.com/hidden-life/secrum-server/internal/app/keys"
 	"github.com/hidden-life/secrum-server/internal/app/messages"
@@ -90,12 +91,15 @@ func main() {
 	// Contacts
 	contactRepo := postgres.NewContactRepository(pool)
 	contactSvc := contact.NewService(userRepo, contactRepo)
-	http.RegisterContactRoutes(srv.Router(), contactSvc)
+	// Chats
+	chatSvc := chats.NewService(log, msgRepo, userRepo)
 
 	srv.Router().Group(func(r chi.Router) {
 		r.Use(authMW)
 		http.RegisterMessagesRoutes(r, msgSvc)
 		http.RegisterProfileRoutes(r, profileSvc)
+		http.RegisterContactRoutes(srv.Router(), contactSvc)
+		http.RegisterChatRoutes(r, chatSvc)
 	})
 	// Start server async
 	go func() {

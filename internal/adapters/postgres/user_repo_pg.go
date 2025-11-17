@@ -47,7 +47,7 @@ WHERE id = $1`
 		&u.UpdatedAt,
 		&u.IsActive,
 	); err != nil {
-		if errors.Is(err, errors.New("no results found")) {
+		if err == pgx.ErrNoRows {
 			return nil, nil
 		}
 		return nil, err
@@ -104,7 +104,7 @@ func (r *UserPGRepository) Create(ctx context.Context, u *user.User) error {
                    is_active
                    ) 
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
-	_, err := r.pool.Exec(ctx, q, u.ID, u.PhoneHash, u.CreatedAt, u.UpdatedAt, u.IsActive)
+	_, err := r.pool.Exec(ctx, q, u.ID, u.PhoneHash, u.DisplayName, u.AvatarURL, u.StatusMessage, u.SafetyFingerprint, u.CreatedAt, u.UpdatedAt, u.IsActive)
 
 	return err
 }

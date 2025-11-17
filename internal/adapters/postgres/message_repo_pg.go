@@ -119,3 +119,48 @@ func (m *MessageRepositoryPG) MarkRead(ctx context.Context, ids []uuid.UUID) err
 
 	return err
 }
+
+func (m *MessageRepositoryPG) UserChatsList(ctx context.Context, userID uuid.UUID) ([]ports.ChatSummary, error) {
+	const q = `WITH user_messages AS (
+		SELECT 
+			CASE 
+				WHEN sender_user_id = $1 THEN recipient_user_id
+				ELSE sender_user_id
+			END AS peer_user_id,
+			id,
+			ciphertext,
+			created_at,
+			recipient_user_id,
+			read_at
+		FROM messages
+		WHERE sender_user_id = $1 OR recipient_user_id = $1
+	), agg AS (
+		SELECT 
+			peer_user_id, 
+			MAX(created_at) AS last_message_at,
+			(ARRAY_AGG(ciphertext ORDER BY created_at DESC))[1] AS last_cipher_text,
+			COUNT(*) FILTER (WHERE recipient_user_id = $1 AND read_at IS NULL) AS unread_count
+		FROM user_messages
+		GROUP BY peer_user_id
+	)
+	SELECT peer_user_id, last_message_at, last_cipher_text, unread_count FROM agg ORDER BY last_message_at DESC;
+`
+
+	rows, err := m.pool.Query(ctx, q, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var res []ports.ChatSummary
+	for rows.Next() {
+		var cs ports.ChatSummary
+		if err := rows.Scan(&cs.PeerUserID, &cs.LastMessageAt, &cs.LastCipherText, &cs.UnreadCount); err != nil {
+			return nil, err
+		}
+
+		res = append(res, cs)
+	}
+
+	return res, rows.Err()
+}
