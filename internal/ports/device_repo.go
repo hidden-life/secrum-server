@@ -18,4 +18,6 @@ type DeviceRepository interface {
 	UpdateLastSeen(context.Context, uuid.UUID, time.Time) error
 
 	ListActiveByUser(context.Context, uuid.UUID) ([]*device.Device, error)
+	Deactivate(context.Context, uuid.UUID) error
+	Delete(context.Context, uuid.UUID) error
 }

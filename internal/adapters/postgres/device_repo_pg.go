@@ -108,3 +108,15 @@ func (r *DeviceRepositoryPG) ListActiveByUser(ctx context.Context, userID uuid.U
 
 	return res, nil
 }
+
+func (r *DeviceRepositoryPG) Deactivate(ctx context.Context, id uuid.UUID) error {
+	const q = `UPDATE devices SET is_active = FALSE, refresh_token_hash = NULL, refresh_token_expires_at = NULL WHERE id = $1`
+	_, err := r.pool.Exec(ctx, q, id)
+	return err
+}
+
+func (r *DeviceRepositoryPG) Delete(ctx context.Context, id uuid.UUID) error {
+	const q = `DELETE FROM devices WHERE id = $1`
+	_, err := r.pool.Exec(ctx, q, id)
+	return err
+}
