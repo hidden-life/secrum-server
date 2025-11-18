@@ -66,3 +66,45 @@ func (r *DeviceRepositoryPG) UpdateLastSeen(ctx context.Context, id uuid.UUID, l
 
 	return err
 }
+
+func (r *DeviceRepositoryPG) ListActiveByUser(ctx context.Context, userID uuid.UUID) ([]*device.Device, error) {
+	const q = `SELECT
+		id,
+		user_id,
+		name,
+		platform,
+		created_at,
+		last_seen,
+		is_active,
+		refresh_token_hash,
+		refresh_token_expires_at
+	FROM devices
+	WHERE user_id = $1 AND is_active = TRUE`
+
+	rows, err := r.pool.Query(ctx, q, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var res []*device.Device
+	for rows.Next() {
+		var d device.Device
+		if err := rows.Scan(
+			&d.ID,
+			&d.UserID,
+			&d.Name,
+			&d.Platform,
+			&d.CreatedAt,
+			&d.LastSeen,
+			&d.IsActive,
+			&d.RefreshTokenHash,
+			&d.RefreshTokenExpiresAt,
+		); err != nil {
+			return nil, err
+		}
+		res = append(res, &d)
+	}
+
+	return res, nil
+}

@@ -12,9 +12,10 @@ import (
 )
 
 type Service struct {
-	log            *zap.Logger
-	msgRepository  ports.MessageRepository
-	userRepository ports.UserRepository
+	log              *zap.Logger
+	msgRepository    ports.MessageRepository
+	userRepository   ports.UserRepository
+	deviceRepository ports.DeviceRepository
 }
 
 // SendRequest is input for sending message
@@ -49,17 +50,23 @@ type AckRequest struct {
 	Read      []string `json:"read,omitempty"`
 }
 
-func NewService(log *zap.Logger, msgRepository ports.MessageRepository, userRepository ports.UserRepository) *Service {
+func NewService(
+	log *zap.Logger,
+	msgRepository ports.MessageRepository,
+	userRepository ports.UserRepository,
+	deviceRepository ports.DeviceRepository,
+) *Service {
 	return &Service{
-		log:            log,
-		msgRepository:  msgRepository,
-		userRepository: userRepository,
+		log:              log,
+		msgRepository:    msgRepository,
+		userRepository:   userRepository,
+		deviceRepository: deviceRepository,
 	}
 }
 
 func (s *Service) Send(ctx context.Context, sUserID, sDeviceID string, req *SendRequest) (*SendResponse, error) {
-	if req.CipherText == "" || req.RecipientUserID == "" || req.RecipientDeviceID == "" {
-		return nil, fmt.Errorf("missing required parameters")
+	if req.CipherText == "" || req.RecipientUserID == "" {
+		return nil, fmt.Errorf("missing required parameters (recipient_user_id, cipher_text)")
 	}
 
 	senderUserID, err := uuid.Parse(sUserID)
@@ -75,9 +82,13 @@ func (s *Service) Send(ctx context.Context, sUserID, sDeviceID string, req *Send
 	if err != nil {
 		return nil, fmt.Errorf("invalid recipient user id: %w", err)
 	}
-	recipientDeviceID, err := uuid.Parse(req.RecipientDeviceID)
+
+	devices, err := s.deviceRepository.ListActiveByUser(ctx, recipientUserID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid recipient device id: %w", err)
+		return nil, fmt.Errorf("failed to get list of active recipient devices: %w", err)
+	}
+	if len(devices) == 0 {
+		return nil, fmt.Errorf("no active recipient devices found")
 	}
 
 	var otpkUUID *uuid.UUID
@@ -89,21 +100,37 @@ func (s *Service) Send(ctx context.Context, sUserID, sDeviceID string, req *Send
 		otpkUUID = &id
 	}
 
-	// Optionally: we can check receiver (user) using userRepository (TODO)
-	msg := message.New(senderUserID, senderDeviceID, recipientUserID, recipientDeviceID, req.CipherText)
-	msg.X3DHOTPKID = otpkUUID
+	var messageIDs []uuid.UUID
+	for _, d := range devices {
+		msg := message.New(senderUserID, senderDeviceID, recipientUserID, d.ID, req.CipherText)
+		msg.X3DHOTPKID = otpkUUID
+		if req.PubKey != nil {
+			msg.PubKey = *req.PubKey
+		}
 
-	if req.PubKey != nil {
-		msg.PubKey = *req.PubKey
+		if err := s.msgRepository.Save(ctx, msg); err != nil {
+			return nil, fmt.Errorf("failed to save message for device %s: %w", d.ID.String(), err)
+		}
+
+		messageIDs = append(messageIDs, d.ID)
 	}
 
-	if err := s.msgRepository.Save(ctx, msg); err != nil {
-		return nil, fmt.Errorf("failed to save message: %w", err)
+	s.log.Info(
+		"Encrypted message stored (multi-device)",
+		zap.String("from_user", senderUserID.String()),
+		zap.String("from_device", req.RecipientDeviceID),
+		zap.String("to_user", req.RecipientUserID),
+		zap.Int("devices_count", len(devices)),
+	)
+
+	first := ""
+	if len(messageIDs) > 0 {
+		first = messageIDs[0].String()
 	}
 
-	s.log.Info("Encrypted message stored", zap.String("msg_id", msg.ID.String()), zap.String("to_user", req.RecipientUserID), zap.String("from_user", senderUserID.String()))
-
-	return &SendResponse{MessageID: msg.ID.String()}, nil
+	return &SendResponse{
+		MessageID: first,
+	}, nil
 }
 
 // FetchPending returns messages pending for given device

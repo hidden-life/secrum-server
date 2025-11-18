@@ -77,7 +77,7 @@ func main() {
 
 	// message repository
 	msgRepo := postgres.NewMessageRepository(pool)
-	msgSvc := messages.NewService(log, msgRepo, userRepo)
+	msgSvc := messages.NewService(log, msgRepo, userRepo, deviceRepo)
 
 	// auth middleware
 	authMW := http.AuthMiddleware(tokenManager)
