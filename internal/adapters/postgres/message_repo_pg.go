@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/hidden-life/secrum-server/internal/domain/message"
 	"github.com/hidden-life/secrum-server/internal/ports"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -163,4 +164,51 @@ func (m *MessageRepositoryPG) UserChatsList(ctx context.Context, userID uuid.UUI
 	}
 
 	return res, rows.Err()
+}
+
+func (m *MessageRepositoryPG) SaveMany(ctx context.Context, messages []*message.Message) error {
+	if len(messages) == 0 {
+		return nil
+	}
+
+	batch := &pgx.Batch{}
+
+	const q = `INSERT INTO messages (
+					  id, 
+					  sender_user_id, 
+					  sender_device_id,
+                      recipient_user_id,
+                      recipient_device_id,
+                      group_id,
+                      ciphertext,
+                      created_at,
+                      x3dh_otpk_id,
+                      ephemeral_pub_key
+		) 
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
+
+	for _, msg := range messages {
+		batch.Queue(q,
+			msg.ID,
+			msg.SenderUserID,
+			msg.SenderDeviceID,
+			msg.RecipientUserID,
+			msg.RecipientDeviceID,
+			msg.GroupID,
+			msg.CipherText,
+			msg.CreatedAt,
+			msg.X3DHOTPKID,
+			msg.PubKey)
+	}
+
+	res := m.pool.SendBatch(ctx, batch)
+	defer res.Close()
+
+	for i := 0; i < len(messages); i++ {
+		if _, err := res.Exec(); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

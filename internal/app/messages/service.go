@@ -32,6 +32,12 @@ type SendResponse struct {
 	MessageID string `json:"message_id"`
 }
 
+type SendGroupMessageRequest struct {
+	CipherText string  `json:"cipher_text"`
+	PubKey     *string `json:"pub_key,omitempty"`
+	X3DHOTPKID *string `json:"x3dh_otpk_id,omitempty"`
+}
+
 // PendingMessage is DTO for outgoing response.
 type PendingMessage struct {
 	ID                string `json:"id"`
@@ -205,4 +211,68 @@ func (s *Service) AckDelivered(ctx context.Context, deviceID string, req AckRequ
 	}
 
 	return nil
+}
+
+func (s *Service) SendGroupMessage(
+	ctx context.Context,
+	senderUserID, senderDeviceID, groupID string,
+	req *SendGroupMessageRequest,
+	members []uuid.UUID) (*SendResponse, error) {
+	if req.CipherText == "" {
+		return nil, fmt.Errorf("cipher_text required")
+	}
+
+	sUID, err := uuid.Parse(senderUserID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid sender user id")
+	}
+	sDID, err := uuid.Parse(senderDeviceID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid sender device id")
+	}
+
+	gID, err := uuid.Parse(groupID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid group id")
+	}
+	var otpkUUID *uuid.UUID
+	if req.X3DHOTPKID != nil && *req.X3DHOTPKID != "" {
+		id, err := uuid.Parse(*req.X3DHOTPKID)
+		if err != nil {
+			return nil, fmt.Errorf("invalid x3dh_otpk_id")
+		}
+		otpkUUID = &id
+	}
+
+	var out []*message.Message
+
+	for _, userID := range members {
+		// девайсы этого участника
+		devs, err := s.deviceRepository.ListActiveByUser(ctx, userID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list devices for user %s: %w", userID, err)
+		}
+
+		for _, d := range devs {
+			msg := message.New(sUID, sDID, userID, d.ID, req.CipherText)
+			msg.GroupID = &gID
+			msg.X3DHOTPKID = otpkUUID
+			if req.PubKey != nil {
+				msg.PubKey = *req.PubKey
+			}
+
+			out = append(out, msg)
+		}
+	}
+
+	if err := s.msgRepository.SaveMany(ctx, out); err != nil {
+		return nil, fmt.Errorf("failed to save group messages: %w", err)
+	}
+
+	var first string
+	if len(out) > 0 {
+		first = out[0].ID.String()
+	}
+
+	return &SendResponse{MessageID: first}, nil
 }

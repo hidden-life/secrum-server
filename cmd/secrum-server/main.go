@@ -110,7 +110,7 @@ func main() {
 		http.RegisterContactRoutes(r, contactSvc)
 		http.RegisterChatRoutes(r, chatSvc)
 		http.RegisterDevicesRoutes(r, deviceSvc)
-		http.RegisterGroupsRoutes(r, groupSvc)
+		http.RegisterGroupsRoutes(r, groupSvc, msgSvc)
 	})
 	// Start server async
 	go func() {

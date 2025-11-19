@@ -298,6 +298,40 @@ func (s *Service) RemoveMember(ctx context.Context, actorUserID, groupID, target
 	return nil
 }
 
+func (s *Service) GetActiveMemberIDs(ctx context.Context, actorID, groupID string) ([]uuid.UUID, error) {
+	actorUID, err := uuid.Parse(actorID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid actor id")
+	}
+
+	gid, err := uuid.Parse(groupID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid group id")
+	}
+
+	isMember, err := s.groupMemberRepository.IsMember(ctx, gid, actorUID)
+	if err != nil {
+		return nil, err
+	}
+	if !isMember {
+		return nil, fmt.Errorf("not a member of group")
+	}
+
+	members, err := s.groupMemberRepository.List(ctx, gid)
+	if err != nil {
+		return nil, err
+	}
+
+	var ids []uuid.UUID
+	for _, m := range members {
+		if m.IsActive {
+			ids = append(ids, m.UserID)
+		}
+	}
+
+	return ids, nil
+}
+
 // trimStringSpace remove spaces and other things
 func trimStringSpace(s string) string {
 	i := 0

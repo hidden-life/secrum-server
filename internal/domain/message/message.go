@@ -20,6 +20,8 @@ type Message struct {
 
 	X3DHOTPKID *uuid.UUID
 	PubKey     string
+
+	GroupID *uuid.UUID
 }
 
 func New(senderUserID, senderDeviceID, recipientUserID, recipientDeviceID uuid.UUID, msg string) *Message {
