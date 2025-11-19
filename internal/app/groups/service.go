@@ -332,6 +332,27 @@ func (s *Service) GetActiveMemberIDs(ctx context.Context, actorID, groupID strin
 	return ids, nil
 }
 
+func (s *Service) EnsureMember(ctx context.Context, gid, uid string) error {
+	userID, err := uuid.Parse(uid)
+	if err != nil {
+		return fmt.Errorf("invalid user id")
+	}
+	groupID, err := uuid.Parse(gid)
+	if err != nil {
+		return fmt.Errorf("invalid group id")
+	}
+
+	isMember, err := s.groupMemberRepository.IsMember(ctx, groupID, userID)
+	if err != nil {
+		return fmt.Errorf("failed to check target group membership: %w", err)
+	}
+	if !isMember {
+		return fmt.Errorf("user is not a member of group")
+	}
+
+	return nil
+}
+
 // trimStringSpace remove spaces and other things
 func trimStringSpace(s string) string {
 	i := 0

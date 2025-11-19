@@ -12,6 +12,7 @@ const (
 	RoleOwner  MemberRole = "owner"
 	RoleAdmin  MemberRole = "admin"
 	RoleMember MemberRole = "member"
+	RoleMuted  MemberRole = "muted"
 )
 
 type Group struct {

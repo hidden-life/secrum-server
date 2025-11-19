@@ -3,6 +3,8 @@ package http
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/hidden-life/secrum-server/internal/app/groups"
@@ -17,7 +19,55 @@ func RegisterGroupsRoutes(r chi.Router, svc *groups.Service, msgSvc *messages.Se
 		r.Post("/{group_id}/members", addGroupMember(svc))
 		r.Delete("/{group_id}/members/{user_id}", removeGroupMember(svc))
 		r.Post("/{group_id}/messages", sendGroupMessages(svc, msgSvc))
+		r.Get("/{group_id}/messages", fetchGroupMessages(svc, msgSvc))
 	})
+}
+
+func fetchGroupMessages(groupSvc *groups.Service, msgSvc *messages.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID := UserIDFromContext(r.Context())
+		if userID == "" {
+			asError(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+
+		gid := chi.URLParam(r, "group_id")
+		if gid == "" {
+			asError(w, http.StatusNotFound, "missing group id")
+			return
+		}
+
+		// membership check
+		if err := groupSvc.EnsureMember(r.Context(), userID, gid); err != nil {
+			asError(w, http.StatusForbidden, err.Error())
+			return
+		}
+
+		// parse optional parameters
+		limitStr := r.URL.Query().Get("limit")
+		limit := 50
+		if limitStr != "" {
+			if v, err := strconv.Atoi(limitStr); err == nil && v > 0 && v <= 500 {
+				limit = v
+			}
+		}
+
+		var beforePtr *time.Time
+		if before := r.URL.Query().Get("before"); before != "" {
+			tm, err := time.Parse(time.RFC3339Nano, before)
+			if err == nil {
+				beforePtr = &tm
+			}
+		}
+
+		res, err := msgSvc.FetchGroupHistory(r.Context(), gid, limit, beforePtr)
+		if err != nil {
+			asError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		asJson(w, http.StatusOK, res)
+	}
 }
 
 func sendGroupMessages(svc *groups.Service, msgSvc *messages.Service) http.HandlerFunc {

@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -211,4 +212,62 @@ func (m *MessageRepositoryPG) SaveMany(ctx context.Context, messages []*message.
 	}
 
 	return nil
+}
+
+func (m *MessageRepositoryPG) GetGroupMessages(ctx context.Context, gid uuid.UUID, limit int, before *time.Time) ([]*message.Message, error) {
+	q := `SELECT 
+			id, 
+			sender_user_id,
+			sender_device_id,
+			recipient_user_id,
+			recipient_device_id,
+			group_id,
+			ciphertext,
+			created_at,
+			delivered_at,
+			read_at,
+			x3dh_otpk_id,
+			ephemeral_pub_key
+		FROM messages
+		WHERE group_id = $1`
+
+	args := []interface{}{gid}
+	argPos := 2
+	if before != nil {
+		q += fmt.Sprintf(" AND created_at < $%d", argPos)
+		args = append(args, *before)
+		argPos++
+	}
+
+	q += fmt.Sprintf(" ORDER BY created_at DESC LIMIT $%d", argPos)
+	args = append(args, limit)
+
+	rows, err := m.pool.Query(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []*message.Message
+	for rows.Next() {
+		var msg message.Message
+		if err := rows.Scan(
+			&msg.ID,
+			&msg.SenderUserID,
+			&msg.SenderDeviceID,
+			&msg.RecipientUserID,
+			&msg.RecipientDeviceID,
+			&msg.GroupID,
+			&msg.CipherText,
+			&msg.CreatedAt,
+			&msg.DeliveredAt,
+			&msg.ReadAt,
+			&msg.X3DHOTPKID,
+			&msg.PubKey); err != nil {
+			return nil, err
+		}
+		result = append(result, &msg)
+	}
+
+	return result, nil
 }

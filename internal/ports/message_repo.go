@@ -23,4 +23,5 @@ type MessageRepository interface {
 	MarkDelivered(context.Context, []uuid.UUID) error
 	MarkRead(context.Context, []uuid.UUID) error
 	UserChatsList(context.Context, uuid.UUID) ([]ChatSummary, error)
+	GetGroupMessages(context.Context, uuid.UUID, int, *time.Time) ([]*message.Message, error)
 }

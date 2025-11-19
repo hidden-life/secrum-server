@@ -276,3 +276,31 @@ func (s *Service) SendGroupMessage(
 
 	return &SendResponse{MessageID: first}, nil
 }
+
+func (s *Service) FetchGroupHistory(ctx context.Context, gid string, limit int, before *time.Time) ([]PendingMessage, error) {
+	groupID, err := uuid.Parse(gid)
+	if err != nil {
+		return nil, fmt.Errorf("invalid group id")
+	}
+
+	msgs, err := s.msgRepository.GetGroupMessages(ctx, groupID, limit, before)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch group messages: %w", err)
+	}
+
+	res := make([]PendingMessage, 0, len(msgs))
+	for _, m := range msgs {
+		res = append(res, PendingMessage{
+			ID:                m.ID.String(),
+			SenderDeviceID:    m.SenderDeviceID.String(),
+			SenderUserID:      m.SenderUserID.String(),
+			RecipientUserID:   m.RecipientUserID.String(),
+			RecipientDeviceID: m.RecipientDeviceID.String(),
+			CreatedAt:         m.CreatedAt.Format(time.RFC3339Nano),
+			PubKey:            m.PubKey,
+			CipherText:        m.CipherText,
+		})
+	}
+
+	return res, nil
+}
