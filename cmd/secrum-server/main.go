@@ -17,6 +17,7 @@ import (
 	"github.com/hidden-life/secrum-server/internal/app/chats"
 	"github.com/hidden-life/secrum-server/internal/app/contact"
 	"github.com/hidden-life/secrum-server/internal/app/devices"
+	"github.com/hidden-life/secrum-server/internal/app/groups"
 	"github.com/hidden-life/secrum-server/internal/app/keys"
 	"github.com/hidden-life/secrum-server/internal/app/messages"
 	"github.com/hidden-life/secrum-server/internal/app/profile"
@@ -98,6 +99,10 @@ func main() {
 	// Chats
 	chatSvc := chats.NewService(log, msgRepo, userRepo)
 
+	groupRepo := postgres.NewGroupRepository(pool)
+	groupMemberRepo := postgres.NewGroupMemberRepository(pool)
+	groupSvc := groups.NewService(log, groupRepo, groupMemberRepo, userRepo, deviceRepo, msgRepo)
+
 	srv.Router().Group(func(r chi.Router) {
 		r.Use(authMW)
 		http.RegisterMessagesRoutes(r, msgSvc)
@@ -105,6 +110,7 @@ func main() {
 		http.RegisterContactRoutes(r, contactSvc)
 		http.RegisterChatRoutes(r, chatSvc)
 		http.RegisterDevicesRoutes(r, deviceSvc)
+		http.RegisterGroupsRoutes(r, groupSvc)
 	})
 	// Start server async
 	go func() {
