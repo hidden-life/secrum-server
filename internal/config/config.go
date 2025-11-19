@@ -16,6 +16,8 @@ type Config struct {
 	DatabaseURL  string
 	RedisAddress string
 
+	FileStorageDir string
+
 	JWTAccessSecret      string
 	JWTRefreshSecret     string
 	JWTAccessTTLMinutes  int
@@ -51,6 +53,8 @@ func LoadConfig() *Config {
 
 		DatabaseURL:  getEnv("DATABASE_URL", "postgres://secrum_user:secrum_password@localhost:5432/secrum_db?sslmode=disable"),
 		RedisAddress: getEnv("REDIS_ADDR", "localhost:6379"),
+
+		FileStorageDir: getEnv("FILE_STORAGE_DIR", "attachments"),
 
 		JWTAccessSecret:      getEnv("JWT_ACCESS_SECRET", "dev_access_secret"),
 		JWTRefreshSecret:     getEnv("JWT_REFRESH_SECRET", "dev_refresh_secret"),

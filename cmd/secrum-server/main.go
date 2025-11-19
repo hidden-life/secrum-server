@@ -13,6 +13,8 @@ import (
 	"github.com/hidden-life/secrum-server/internal/adapters/otp"
 	"github.com/hidden-life/secrum-server/internal/adapters/postgres"
 	internalRedis "github.com/hidden-life/secrum-server/internal/adapters/redis"
+	"github.com/hidden-life/secrum-server/internal/adapters/storage"
+	"github.com/hidden-life/secrum-server/internal/app/attachments"
 	"github.com/hidden-life/secrum-server/internal/app/auth"
 	"github.com/hidden-life/secrum-server/internal/app/chats"
 	"github.com/hidden-life/secrum-server/internal/app/contact"
@@ -103,6 +105,10 @@ func main() {
 	groupMemberRepo := postgres.NewGroupMemberRepository(pool)
 	groupSvc := groups.NewService(log, groupRepo, groupMemberRepo, userRepo, deviceRepo, msgRepo)
 
+	attachmentsRepo := postgres.NewAttachmentRepository(pool)
+	localStorage, err := storage.NewLocalStorage(cfg.FileStorageDir) // @todo: Change to using from configuration
+	attachmentSvc := attachments.NewService(log, attachmentsRepo, localStorage, "attachments", 1024*1024*50)
+
 	srv.Router().Group(func(r chi.Router) {
 		r.Use(authMW)
 		http.RegisterMessagesRoutes(r, msgSvc)
@@ -111,6 +117,7 @@ func main() {
 		http.RegisterChatRoutes(r, chatSvc)
 		http.RegisterDevicesRoutes(r, deviceSvc)
 		http.RegisterGroupsRoutes(r, groupSvc, msgSvc)
+		http.RegisterAttachmentsRoutes(r, attachmentSvc)
 	})
 	// Start server async
 	go func() {
