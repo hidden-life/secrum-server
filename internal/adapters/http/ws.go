@@ -142,6 +142,17 @@ func wsWriter(
 	ticker := time.NewTicker(30 * time.Second) // heartbeat
 	defer ticker.Stop()
 
+	send := func(eventType string, data any) {
+		env := real_time.OutEnvelope{Type: eventType, Data: data}
+		buff, err := codec.Encode(env)
+		if err != nil {
+			log.Warn("failed to encode event", zap.Error(err))
+			return
+		}
+
+		_ = conn.WriteMessage(websocket.TextMessage, buff)
+	}
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -153,25 +164,20 @@ func wsWriter(
 			}
 
 			switch msg := payload.(type) {
-			case messages.PendingMessage:
-				env := real_time.OutEnvelope{
-					Type: "message",
-					Data: msg,
-				}
+			case real_time.EventMessage:
+				send("message", msg)
 
-				buff, err := codec.Encode(env)
-				if err != nil {
-					log.Warn("failed to encode ws message", zap.Error(err))
-					continue
-				}
+			case real_time.EventGroupMessage:
+				send("group_message", msg)
 
-				if err := conn.WriteMessage(websocket.TextMessage, buff); err != nil {
-					log.Warn("failed to write ws message", zap.Error(err))
-					continue
-				}
+			case real_time.EventTyping:
+				send("typing", msg)
+
+			case real_time.EventStatus:
+				send("status", msg)
 
 			default:
-				log.Warn("unknown realtime payload type", zap.Any("payload", msg))
+				log.Warn("unknown ws payload", zap.Any("payload", msg))
 			}
 
 		case <-ticker.C:
