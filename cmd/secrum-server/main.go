@@ -25,6 +25,7 @@ import (
 	"github.com/hidden-life/secrum-server/internal/app/profile"
 	"github.com/hidden-life/secrum-server/internal/config"
 	"github.com/hidden-life/secrum-server/internal/logger"
+	"github.com/hidden-life/secrum-server/internal/real_time"
 	"github.com/hidden-life/secrum-server/internal/server"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
@@ -81,7 +82,8 @@ func main() {
 
 	// message repository
 	msgRepo := postgres.NewMessageRepository(pool)
-	msgSvc := messages.NewService(log, msgRepo, userRepo, deviceRepo)
+	rtHub := real_time.NewDeliveryHub(log)
+	msgSvc := messages.NewService(log, msgRepo, userRepo, deviceRepo, rtHub)
 
 	// auth middleware
 	authMW := http.AuthMiddleware(tokenManager)
@@ -118,6 +120,8 @@ func main() {
 		http.RegisterDevicesRoutes(r, deviceSvc)
 		http.RegisterGroupsRoutes(r, groupSvc, msgSvc)
 		http.RegisterAttachmentsRoutes(r, attachmentSvc)
+
+		http.RegisterWSRoutes(r, log, rtHub, msgSvc)
 	})
 	// Start server async
 	go func() {

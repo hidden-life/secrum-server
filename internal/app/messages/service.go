@@ -16,6 +16,7 @@ type Service struct {
 	msgRepository    ports.MessageRepository
 	userRepository   ports.UserRepository
 	deviceRepository ports.DeviceRepository
+	realtimeDelivery RealtimeDelivery
 }
 
 // SendRequest is input for sending message
@@ -61,12 +62,14 @@ func NewService(
 	msgRepository ports.MessageRepository,
 	userRepository ports.UserRepository,
 	deviceRepository ports.DeviceRepository,
+	realtime RealtimeDelivery,
 ) *Service {
 	return &Service{
 		log:              log,
 		msgRepository:    msgRepository,
 		userRepository:   userRepository,
 		deviceRepository: deviceRepository,
+		realtimeDelivery: realtime,
 	}
 }
 
@@ -106,7 +109,7 @@ func (s *Service) Send(ctx context.Context, sUserID, sDeviceID string, req *Send
 		otpkUUID = &id
 	}
 
-	var messageIDs []uuid.UUID
+	var first string
 	for _, d := range devices {
 		msg := message.New(senderUserID, senderDeviceID, recipientUserID, d.ID, req.CipherText)
 		msg.X3DHOTPKID = otpkUUID
@@ -118,7 +121,26 @@ func (s *Service) Send(ctx context.Context, sUserID, sDeviceID string, req *Send
 			return nil, fmt.Errorf("failed to save message for device %s: %w", d.ID.String(), err)
 		}
 
-		messageIDs = append(messageIDs, d.ID)
+		if first == "" {
+			first = msg.ID.String()
+		}
+
+		if s.realtimeDelivery != nil {
+			pm := PendingMessage{
+				ID:                msg.ID.String(),
+				SenderUserID:      msg.SenderUserID.String(),
+				SenderDeviceID:    msg.SenderDeviceID.String(),
+				RecipientUserID:   msg.RecipientUserID.String(),
+				RecipientDeviceID: msg.RecipientDeviceID.String(),
+				CipherText:        msg.CipherText,
+				PubKey:            msg.PubKey,
+				CreatedAt:         msg.CreatedAt.Format(time.RFC3339Nano),
+			}
+
+			if err := s.realtimeDelivery.Push(ctx, msg.RecipientDeviceID, pm); err != nil {
+				s.log.Debug("failed to push realtime message", zap.String("device_id", d.ID.String()), zap.Error(err))
+			}
+		}
 	}
 
 	s.log.Info(
@@ -128,11 +150,6 @@ func (s *Service) Send(ctx context.Context, sUserID, sDeviceID string, req *Send
 		zap.String("to_user", req.RecipientUserID),
 		zap.Int("devices_count", len(devices)),
 	)
-
-	first := ""
-	if len(messageIDs) > 0 {
-		first = messageIDs[0].String()
-	}
 
 	return &SendResponse{
 		MessageID: first,
@@ -247,7 +264,6 @@ func (s *Service) SendGroupMessage(
 	var out []*message.Message
 
 	for _, userID := range members {
-		// девайсы этого участника
 		devs, err := s.deviceRepository.ListActiveByUser(ctx, userID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to list devices for user %s: %w", userID, err)
@@ -267,6 +283,25 @@ func (s *Service) SendGroupMessage(
 
 	if err := s.msgRepository.SaveMany(ctx, out); err != nil {
 		return nil, fmt.Errorf("failed to save group messages: %w", err)
+	}
+
+	if s.realtimeDelivery != nil {
+		for _, msg := range out {
+			pm := PendingMessage{
+				ID:                msg.ID.String(),
+				SenderUserID:      msg.SenderUserID.String(),
+				SenderDeviceID:    msg.SenderDeviceID.String(),
+				RecipientUserID:   msg.RecipientUserID.String(),
+				RecipientDeviceID: msg.RecipientDeviceID.String(),
+				CipherText:        msg.CipherText,
+				CreatedAt:         msg.CreatedAt.Format(time.RFC3339Nano),
+				PubKey:            msg.PubKey,
+			}
+
+			if err := s.realtimeDelivery.Push(ctx, msg.RecipientDeviceID, pm); err != nil {
+				s.log.Debug("failed to push group realtime message", zap.String("device_id", msg.RecipientDeviceID.String()), zap.Error(err))
+			}
+		}
 	}
 
 	var first string
