@@ -84,11 +84,12 @@ func wsHandler(
 		)
 
 		// Channel of output messages from hub -> current WS
-		outCh := make(chan any, 32)
+		outCh := make(chan []byte, 32)
 
 		// Register connection into the HUB
-		hub.Register(devUUID, outCh)
-		defer hub.Unregister(devUUID, outCh)
+		userUUID, _ := uuid.Parse(userID)
+		hub.Register(devUUID, userUUID, outCh)
+		defer hub.Unregister(devUUID)
 		defer close(outCh)
 
 		ctx, cancel := context.WithCancel(r.Context())
@@ -137,47 +138,23 @@ func wsWriter(
 	log *zap.Logger,
 	conn *websocket.Conn,
 	codec WSCodec,
-	outCh <-chan any,
+	outCh <-chan []byte,
 ) {
 	ticker := time.NewTicker(30 * time.Second) // heartbeat
 	defer ticker.Stop()
-
-	send := func(eventType string, data any) {
-		env := real_time.OutEnvelope{Type: eventType, Data: data}
-		buff, err := codec.Encode(env)
-		if err != nil {
-			log.Warn("failed to encode event", zap.Error(err))
-			return
-		}
-
-		_ = conn.WriteMessage(websocket.TextMessage, buff)
-	}
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
 
-		case payload, ok := <-outCh:
+		case raw, ok := <-outCh:
 			if !ok {
 				return
 			}
-
-			switch msg := payload.(type) {
-			case real_time.EventMessage:
-				send("message", msg)
-
-			case real_time.EventGroupMessage:
-				send("group_message", msg)
-
-			case real_time.EventTyping:
-				send("typing", msg)
-
-			case real_time.EventStatus:
-				send("status", msg)
-
-			default:
-				log.Warn("unknown ws payload", zap.Any("payload", msg))
+			if err := conn.WriteMessage(websocket.TextMessage, raw); err != nil {
+				log.Warn("failed to write ws message", zap.Error(err))
+				return
 			}
 
 		case <-ticker.C:

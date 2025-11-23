@@ -2,12 +2,14 @@ package messages
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/hidden-life/secrum-server/internal/domain/message"
 	"github.com/hidden-life/secrum-server/internal/ports"
+	"github.com/hidden-life/secrum-server/internal/real_time"
 	"go.uber.org/zap"
 )
 
@@ -73,6 +75,7 @@ func NewService(
 	}
 }
 
+// Send allows to send single message
 func (s *Service) Send(ctx context.Context, sUserID, sDeviceID string, req *SendRequest) (*SendResponse, error) {
 	if req.CipherText == "" || req.RecipientUserID == "" {
 		return nil, fmt.Errorf("missing required parameters (recipient_user_id, cipher_text)")
@@ -92,6 +95,7 @@ func (s *Service) Send(ctx context.Context, sUserID, sDeviceID string, req *Send
 		return nil, fmt.Errorf("invalid recipient user id: %w", err)
 	}
 
+	// load all active devices of recipient
 	devices, err := s.deviceRepository.ListActiveByUser(ctx, recipientUserID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get list of active recipient devices: %w", err)
@@ -125,21 +129,24 @@ func (s *Service) Send(ctx context.Context, sUserID, sDeviceID string, req *Send
 			first = msg.ID.String()
 		}
 
-		if s.realtimeDelivery != nil {
-			pm := PendingMessage{
-				ID:                msg.ID.String(),
-				SenderUserID:      msg.SenderUserID.String(),
-				SenderDeviceID:    msg.SenderDeviceID.String(),
-				RecipientUserID:   msg.RecipientUserID.String(),
-				RecipientDeviceID: msg.RecipientDeviceID.String(),
-				CipherText:        msg.CipherText,
-				PubKey:            msg.PubKey,
-				CreatedAt:         msg.CreatedAt.Format(time.RFC3339Nano),
-			}
+		e := real_time.EventMessage{
+			ID:                msg.ID.String(),
+			SenderUserID:      msg.SenderUserID.String(),
+			SenderDeviceID:    msg.SenderDeviceID.String(),
+			RecipientUserID:   msg.RecipientUserID.String(),
+			RecipientDeviceID: msg.RecipientDeviceID.String(),
+			CipherText:        msg.CipherText,
+			PubKey:            msg.PubKey,
+			CreatedAt:         msg.CreatedAt.Format(time.RFC3339Nano),
+		}
 
-			if err := s.realtimeDelivery.Push(ctx, msg.RecipientDeviceID, pm); err != nil {
-				s.log.Debug("failed to push realtime message", zap.String("device_id", d.ID.String()), zap.Error(err))
-			}
+		buff, err := json.Marshal(real_time.OutEnvelope{
+			Type: "message",
+			Data: e,
+		})
+
+		if err == nil {
+			_ = s.realtimeDelivery.PushToDevice(ctx, msg.RecipientDeviceID, buff)
 		}
 	}
 
@@ -158,7 +165,7 @@ func (s *Service) Send(ctx context.Context, sUserID, sDeviceID string, req *Send
 
 // FetchPending returns messages pending for given device
 func (s *Service) FetchPending(ctx context.Context, deviceID string, limit int) ([]PendingMessage, error) {
-	if limit <= 0 || limit >= 500 {
+	if limit <= 0 || limit > 500 {
 		limit = 500
 	}
 
@@ -285,22 +292,25 @@ func (s *Service) SendGroupMessage(
 		return nil, fmt.Errorf("failed to save group messages: %w", err)
 	}
 
-	if s.realtimeDelivery != nil {
-		for _, msg := range out {
-			pm := PendingMessage{
-				ID:                msg.ID.String(),
-				SenderUserID:      msg.SenderUserID.String(),
-				SenderDeviceID:    msg.SenderDeviceID.String(),
-				RecipientUserID:   msg.RecipientUserID.String(),
-				RecipientDeviceID: msg.RecipientDeviceID.String(),
-				CipherText:        msg.CipherText,
-				CreatedAt:         msg.CreatedAt.Format(time.RFC3339Nano),
-				PubKey:            msg.PubKey,
-			}
+	for _, msg := range out {
+		e := real_time.EventGroupMessage{
+			ID:                msg.ID.String(),
+			SenderUserID:      msg.SenderUserID.String(),
+			SenderDeviceID:    msg.SenderDeviceID.String(),
+			RecipientUserID:   msg.RecipientUserID.String(),
+			RecipientDeviceID: msg.RecipientDeviceID.String(),
+			CipherText:        msg.CipherText,
+			CreatedAt:         msg.CreatedAt.Format(time.RFC3339Nano),
+			PubKey:            msg.PubKey,
+			GroupID:           gID.String(),
+		}
 
-			if err := s.realtimeDelivery.Push(ctx, msg.RecipientDeviceID, pm); err != nil {
-				s.log.Debug("failed to push group realtime message", zap.String("device_id", msg.RecipientDeviceID.String()), zap.Error(err))
-			}
+		buff, err := json.Marshal(real_time.OutEnvelope{
+			Type: "group_message",
+			Data: e,
+		})
+		if err == nil {
+			_ = s.realtimeDelivery.PushToDevice(ctx, msg.RecipientDeviceID, buff)
 		}
 	}
 
