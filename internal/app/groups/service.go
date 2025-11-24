@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/hidden-life/secrum-server/internal/domain/group"
 	"github.com/hidden-life/secrum-server/internal/ports"
+	"github.com/hidden-life/secrum-server/internal/real_time"
 	"go.uber.org/zap"
 )
 
@@ -17,6 +18,7 @@ type Service struct {
 	userRepository        ports.UserRepository
 	deviceRepository      ports.DeviceRepository
 	messageRepository     ports.MessageRepository
+	hub                   *real_time.DeliveryHub
 }
 
 type GroupResponse struct {
@@ -49,6 +51,7 @@ func NewService(
 	userRepo ports.UserRepository,
 	deviceRepo ports.DeviceRepository,
 	messageRepo ports.MessageRepository,
+	hub *real_time.DeliveryHub,
 ) *Service {
 	return &Service{
 		log:                   log,
@@ -57,6 +60,7 @@ func NewService(
 		userRepository:        userRepo,
 		deviceRepository:      deviceRepo,
 		messageRepository:     messageRepo,
+		hub:                   hub,
 	}
 }
 
@@ -122,6 +126,15 @@ func (s *Service) CreateGroup(ctx context.Context, creator, name string, avatarU
 		AvatarURL: g.AvatarURL,
 		Role:      string(group.RoleOwner),
 	}
+
+	membersList, _ := s.groupMemberRepository.List(ctx, g.ID)
+	var ids []uuid.UUID
+	for _, m := range membersList {
+		if m.IsActive {
+			ids = append(ids, m.UserID)
+		}
+	}
+	s.hub.SetGroupMembers(g.ID, ids)
 
 	return resp, nil
 }
@@ -243,6 +256,15 @@ func (s *Service) AddMember(ctx context.Context, actorUserID, groupID, targetUse
 		return fmt.Errorf("failed to add member: %w", err)
 	}
 
+	membersList, _ := s.groupMemberRepository.List(ctx, groupUUID)
+	var ids []uuid.UUID
+	for _, m := range membersList {
+		if m.IsActive {
+			ids = append(ids, m.UserID)
+		}
+	}
+	s.hub.SetGroupMembers(groupUUID, ids)
+
 	return nil
 }
 
@@ -270,30 +292,29 @@ func (s *Service) RemoveMember(ctx context.Context, actorUserID, groupID, target
 	}
 
 	if actorUUID == targetUUID {
-		return fmt.Errorf("user (actor) is already a member")
+		return fmt.Errorf("cannot remove yourself")
 	}
 
 	isMember, err := s.groupMemberRepository.IsMember(ctx, groupUUID, targetUUID)
 	if err != nil {
 		return fmt.Errorf("failed to check target group membership: %w", err)
 	}
-	if isMember {
-		return fmt.Errorf("user (target) is already a member")
+	if !isMember {
+		return fmt.Errorf("user (target) is not a member")
 	}
 
-	u, err := s.userRepository.GetByID(ctx, targetUUID)
-	if err != nil {
-		return fmt.Errorf("failed to get target user: %w", err)
+	if err := s.groupMemberRepository.RemoveMember(ctx, groupUUID, targetUUID); err != nil {
+		return fmt.Errorf("failed to remove member: %w", err)
 	}
 
-	if u == nil || !u.IsActive {
-		return fmt.Errorf("target user not found or inactive")
+	membersList, _ := s.groupMemberRepository.List(ctx, groupUUID)
+	var ids []uuid.UUID
+	for _, m := range membersList {
+		if m.IsActive {
+			ids = append(ids, m.UserID)
+		}
 	}
-
-	m := group.NewMember(groupUUID, targetUUID, group.RoleMember)
-	if err := s.groupMemberRepository.AddMember(ctx, m); err != nil {
-		return fmt.Errorf("failed to add member: %w", err)
-	}
+	s.hub.SetGroupMembers(groupUUID, ids)
 
 	return nil
 }
