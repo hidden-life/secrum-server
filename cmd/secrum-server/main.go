@@ -106,7 +106,7 @@ func main() {
 
 	groupRepo := postgres.NewGroupRepository(pool)
 	groupMemberRepo := postgres.NewGroupMemberRepository(pool)
-	groupSvc := groups.NewService(log, groupRepo, groupMemberRepo, userRepo, deviceRepo, msgRepo)
+	groupSvc := groups.NewService(log, groupRepo, groupMemberRepo, userRepo, deviceRepo, msgRepo, rtHub)
 
 	attachmentsRepo := postgres.NewAttachmentRepository(pool)
 	localStorage, err := storage.NewLocalStorage(cfg.FileStorageDir) // @todo: Change to using from configuration
@@ -124,7 +124,7 @@ func main() {
 		http.RegisterGroupsRoutes(r, groupSvc, msgSvc)
 		http.RegisterAttachmentsRoutes(r, attachmentSvc)
 
-		http.RegisterWSRoutes(r, log, rtHub, msgSvc, *presenceSvc)
+		http.RegisterWSRoutes(r, log, rtHub, msgSvc, presenceSvc)
 	})
 	// Start server async
 	go func() {

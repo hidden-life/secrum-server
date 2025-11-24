@@ -43,7 +43,7 @@ func (JSONCodec) Decode(data []byte, v any) error {
 	return json.Unmarshal(data, v)
 }
 
-func RegisterWSRoutes(r chi.Router, log *zap.Logger, hub *real_time.DeliveryHub, msgSvc *messages.Service, presenceSvc presence.Service) {
+func RegisterWSRoutes(r chi.Router, log *zap.Logger, hub *real_time.DeliveryHub, msgSvc *messages.Service, presenceSvc *presence.Service) {
 	codec := JSONCodec{} // now JSON, but in future it will be easy to change
 
 	r.Group(func(r chi.Router) {
@@ -57,7 +57,7 @@ func wsHandler(
 	hub *real_time.DeliveryHub,
 	msgSvc *messages.Service,
 	codec WSCodec,
-	presenceSvc presence.Service,
+	presenceSvc *presence.Service,
 ) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID := UserIDFromContext(r.Context())
@@ -99,6 +99,20 @@ func wsHandler(
 			log.Warn("failed to mark presence online", zap.Error(err))
 		}
 
+		// send status over the hub
+		status := real_time.EventStatus{
+			UserID: userID,
+			Status: "online",
+		}
+		raw, err := json.Marshal(real_time.OutEnvelope{
+			Type: "status",
+			Data: status,
+		})
+
+		if err == nil {
+			_ = hub.Broadcast(r.Context(), raw)
+		}
+
 		ctx, cancel := context.WithCancel(r.Context())
 		defer cancel()
 
@@ -108,7 +122,7 @@ func wsHandler(
 		}
 
 		// Socket writer
-		go wsWriter(ctx, log, conn, codec, outCh)
+		go wsWriter(ctx, log, conn, codec, outCh, presenceSvc, userID)
 
 		// Socket reader
 		wsReader(ctx, log, conn, codec, msgSvc, userID, deviceID, hub)
@@ -116,6 +130,19 @@ func wsHandler(
 		defer func() {
 			if err := presenceSvc.SetOffline(context.Background(), userID); err != nil {
 				log.Warn("failed to mark presence offline", zap.Error(err))
+			}
+
+			status := real_time.EventStatus{
+				UserID: userID,
+				Status: "offline",
+			}
+
+			raw, err := json.Marshal(real_time.OutEnvelope{
+				Type: "status",
+				Data: status,
+			})
+			if err == nil {
+				_ = hub.Broadcast(context.Background(), raw)
 			}
 		}()
 	}
@@ -152,6 +179,8 @@ func wsWriter(
 	conn *websocket.Conn,
 	codec WSCodec,
 	outCh <-chan []byte,
+	presenceSvc *presence.Service,
+	userID string,
 ) {
 	ticker := time.NewTicker(30 * time.Second) // heartbeat
 	defer ticker.Stop()
@@ -171,6 +200,10 @@ func wsWriter(
 			}
 
 		case <-ticker.C:
+			if err := presenceSvc.Refresh(ctx, userID); err != nil {
+				log.Warn("failed to refresh presence", zap.Error(err))
+			}
+
 			env := real_time.OutEnvelope{
 				Type: "pong",
 				Data: time.Now().UTC().Format(time.RFC3339Nano),
