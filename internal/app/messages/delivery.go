@@ -11,4 +11,5 @@ type RealtimeDelivery interface {
 	PushToUser(context.Context, uuid.UUID, []byte) error
 	PushToGroup(context.Context, uuid.UUID, []byte) error
 	Broadcast(context.Context, []byte) error
+	PushToContacts(context.Context, uuid.UUID, []byte) error
 }

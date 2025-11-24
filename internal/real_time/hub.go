@@ -128,6 +128,11 @@ func (h *DeliveryHub) Broadcast(ctx context.Context, raw []byte) error {
 	return nil
 }
 
+func (h *DeliveryHub) PushToContacts(ctx context.Context, userID uuid.UUID, raw []byte) error {
+	// todo: change using contacts list from database
+	return h.Broadcast(ctx, raw)
+}
+
 func (h *DeliveryHub) SetGroupMembers(gid uuid.UUID, users []uuid.UUID) {
 	h.mtx.Lock()
 	h.groupIdx[gid] = users
