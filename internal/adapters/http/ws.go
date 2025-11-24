@@ -104,7 +104,7 @@ func wsHandler(
 		go wsWriter(ctx, log, conn, codec, outCh)
 
 		// Socket reader
-		wsReader(ctx, log, conn, codec, msgSvc, deviceID)
+		wsReader(ctx, log, conn, codec, msgSvc, userID, deviceID, hub)
 	}
 }
 
@@ -181,7 +181,8 @@ func wsReader(
 	conn *websocket.Conn,
 	codec WSCodec,
 	msgSvc *messages.Service,
-	deviceID string,
+	userID, deviceID string,
+	hub *real_time.DeliveryHub,
 ) {
 	for {
 		_, data, err := conn.ReadMessage()
@@ -228,6 +229,39 @@ func wsReader(
 
 			if err := msgSvc.AckDelivered(ctx, deviceID, req); err != nil {
 				log.Warn("failed to process ack", zap.Error(err))
+			}
+
+		case "typing":
+			var req real_time.EventTyping
+			if len(env.Data) > 0 {
+				if err := json.Unmarshal(env.Data, &req); err != nil {
+					log.Warn("failed to decode typing payload", zap.Error(err))
+					continue
+				}
+			}
+
+			req.UserID = userID // who's typing
+
+			if !req.IsGroup { // p2p typing
+				peerUUID, err := uuid.Parse(req.PeerID)
+				if err != nil {
+					continue
+				}
+
+				raw, err := json.Marshal(req)
+				if err == nil {
+					_ = hub.PushToUser(ctx, peerUUID, raw)
+				}
+			} else { // group typing
+				gid, err := uuid.Parse(req.PeerID)
+				if err != nil {
+					continue
+				}
+
+				raw, err := json.Marshal(req)
+				if err == nil {
+					_ = hub.PushToGroup(ctx, gid, raw)
+				}
 			}
 
 		default:
