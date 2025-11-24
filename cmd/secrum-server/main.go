@@ -25,6 +25,7 @@ import (
 	"github.com/hidden-life/secrum-server/internal/app/profile"
 	"github.com/hidden-life/secrum-server/internal/config"
 	"github.com/hidden-life/secrum-server/internal/logger"
+	"github.com/hidden-life/secrum-server/internal/presence"
 	"github.com/hidden-life/secrum-server/internal/real_time"
 	"github.com/hidden-life/secrum-server/internal/server"
 	"github.com/redis/go-redis/v9"
@@ -111,6 +112,8 @@ func main() {
 	localStorage, err := storage.NewLocalStorage(cfg.FileStorageDir) // @todo: Change to using from configuration
 	attachmentSvc := attachments.NewService(log, attachmentsRepo, localStorage, "attachments", 1024*1024*50)
 
+	presenceSvc := presence.New(rdb)
+
 	srv.Router().Group(func(r chi.Router) {
 		r.Use(authMW)
 		http.RegisterMessagesRoutes(r, msgSvc)
@@ -121,7 +124,7 @@ func main() {
 		http.RegisterGroupsRoutes(r, groupSvc, msgSvc)
 		http.RegisterAttachmentsRoutes(r, attachmentSvc)
 
-		http.RegisterWSRoutes(r, log, rtHub, msgSvc)
+		http.RegisterWSRoutes(r, log, rtHub, msgSvc, *presenceSvc)
 	})
 	// Start server async
 	go func() {

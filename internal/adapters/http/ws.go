@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/hidden-life/secrum-server/internal/app/messages"
+	"github.com/hidden-life/secrum-server/internal/presence"
 	"github.com/hidden-life/secrum-server/internal/real_time"
 	"go.uber.org/zap"
 )
@@ -42,12 +43,12 @@ func (JSONCodec) Decode(data []byte, v any) error {
 	return json.Unmarshal(data, v)
 }
 
-func RegisterWSRoutes(r chi.Router, log *zap.Logger, hub *real_time.DeliveryHub, msgSvc *messages.Service) {
+func RegisterWSRoutes(r chi.Router, log *zap.Logger, hub *real_time.DeliveryHub, msgSvc *messages.Service, presenceSvc presence.Service) {
 	codec := JSONCodec{} // now JSON, but in future it will be easy to change
 
 	r.Group(func(r chi.Router) {
 		// use auth middleware
-		r.Get("/ws", wsHandler(log, hub, msgSvc, codec))
+		r.Get("/ws", wsHandler(log, hub, msgSvc, codec, presenceSvc))
 	})
 }
 
@@ -56,6 +57,7 @@ func wsHandler(
 	hub *real_time.DeliveryHub,
 	msgSvc *messages.Service,
 	codec WSCodec,
+	presenceSvc presence.Service,
 ) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		userID := UserIDFromContext(r.Context())
@@ -92,6 +94,11 @@ func wsHandler(
 		defer hub.Unregister(devUUID)
 		defer close(outCh)
 
+		// presence: mark user/device online
+		if err := presenceSvc.SetOnline(r.Context(), userID); err != nil {
+			log.Warn("failed to mark presence online", zap.Error(err))
+		}
+
 		ctx, cancel := context.WithCancel(r.Context())
 		defer cancel()
 
@@ -105,6 +112,12 @@ func wsHandler(
 
 		// Socket reader
 		wsReader(ctx, log, conn, codec, msgSvc, userID, deviceID, hub)
+
+		defer func() {
+			if err := presenceSvc.SetOffline(context.Background(), userID); err != nil {
+				log.Warn("failed to mark presence offline", zap.Error(err))
+			}
+		}()
 	}
 }
 
