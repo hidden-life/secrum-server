@@ -197,40 +197,117 @@ func (s *Service) FetchPending(ctx context.Context, deviceID string, limit int) 
 }
 
 func (s *Service) AckDelivered(ctx context.Context, deviceID string, req AckRequest) error {
-	if len(req.Delivered) > 0 {
-		var ids []uuid.UUID
-		for _, str := range req.Delivered {
-			id, err := uuid.Parse(str)
-			if err != nil {
-				return fmt.Errorf("invalid delivered message id: %w", err)
-			}
+	var deliveredIDs []uuid.UUID
+	var readIDs []uuid.UUID
 
-			ids = append(ids, id)
+	// parse delivered
+	for _, str := range req.Delivered {
+		id, err := uuid.Parse(str)
+		if err != nil {
+			return fmt.Errorf("invalid delivered message id: %w", err)
 		}
+		deliveredIDs = append(deliveredIDs, id)
+	}
 
-		if err := s.msgRepository.MarkDelivered(ctx, ids); err != nil {
+	// parse read
+	for _, str := range req.Read {
+		id, err := uuid.Parse(str)
+		if err != nil {
+			return fmt.Errorf("invalid read message id: %w", err)
+		}
+		readIDs = append(readIDs, id)
+	}
+
+	// update delivered_at in database
+	if len(deliveredIDs) > 0 {
+		if err := s.msgRepository.MarkDelivered(ctx, deliveredIDs); err != nil {
 			return fmt.Errorf("failed to mark delivered messages: %w", err)
 		}
 	}
 
-	if len(req.Read) > 0 {
-		var ids []uuid.UUID
-		for _, str := range req.Read {
-			id, err := uuid.Parse(str)
-			if err != nil {
-				return fmt.Errorf("invalid read message id: %w", err)
-			}
-			ids = append(ids, id)
-		}
-
-		if repo, isOk := s.msgRepository.(interface {
+	// update read_at in database
+	if len(readIDs) > 0 {
+		if repo, ok := s.msgRepository.(interface {
 			MarkRead(ctx context.Context, ids []uuid.UUID) error
-		}); isOk {
-			if err := repo.MarkRead(ctx, ids); err != nil {
+		}); ok {
+			if err := repo.MarkRead(ctx, readIDs); err != nil {
 				return fmt.Errorf("failed to mark read messages: %w", err)
 			}
 		} else {
 			s.log.Warn("msgRepository does not implement MarkRead(...)")
+		}
+	}
+
+	// WS events to sender (using delivery hub)
+	if s.realtimeDelivery != nil && (len(deliveredIDs) > 0 || len(readIDs) > 0) {
+		idSet := make(map[uuid.UUID]struct{})
+
+		deliveredSet := make(map[uuid.UUID]struct{})
+		for _, id := range deliveredIDs {
+			deliveredSet[id] = struct{}{}
+			idSet[id] = struct{}{}
+		}
+
+		readSet := make(map[uuid.UUID]struct{})
+		for _, id := range readIDs {
+			readSet[id] = struct{}{}
+			idSet[id] = struct{}{}
+		}
+
+		allIDs := make([]uuid.UUID, 0, len(idSet))
+		for id := range idSet {
+			allIDs = append(allIDs, id)
+		}
+
+		msgs, err := s.msgRepository.GetByIDs(ctx, allIDs)
+		if err != nil {
+			// log but not break all ack
+			s.log.Warn("failed to load messages for ack events", zap.Error(err))
+			return nil
+		}
+
+		for _, msg := range msgs {
+			// ack delivered
+			if _, ok := deliveredSet[msg.ID]; ok {
+				e := real_time.EventAckDelivered{
+					MessageID:  msg.ID.String(),
+					ToUserID:   msg.RecipientUserID.String(),
+					ToDeviceID: msg.RecipientDeviceID.String(),
+				}
+
+				env := real_time.OutEnvelope{
+					Type: "ack_delivered",
+					Data: e,
+				}
+
+				raw, err := json.Marshal(env)
+				if err == nil {
+					_ = s.realtimeDelivery.PushToDevice(ctx, msg.SenderDeviceID, raw)
+				} else {
+					s.log.Warn("failed to marshal ack_delivered event", zap.Error(err))
+				}
+			}
+
+			// ack read
+			if _, ok := readSet[msg.ID]; ok {
+				e := real_time.EventAckRead{
+					MessageID:  msg.ID.String(),
+					ToUserID:   msg.RecipientUserID.String(),
+					ToDeviceID: msg.RecipientDeviceID.String(),
+				}
+
+				env := real_time.OutEnvelope{
+					Type: "ack_read",
+					Data: e,
+				}
+
+				raw, err := json.Marshal(env)
+				if err == nil {
+					_ = s.realtimeDelivery.PushToDevice(ctx, msg.SenderDeviceID, raw)
+				} else {
+					s.log.Warn("failed to marshal ack_read event", zap.Error(err))
+				}
+			}
 		}
 	}
 

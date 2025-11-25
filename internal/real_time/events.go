@@ -34,3 +34,15 @@ type EventStatus struct {
 	UserID string `json:"user_id"`
 	Status string `json:"status"` // "online" | "offline"
 }
+
+type EventAckDelivered struct {
+	MessageID  string `json:"message_id"`
+	ToUserID   string `json:"to_user_id"`
+	ToDeviceID string `json:"to_device_id"`
+}
+
+type EventAckRead struct {
+	MessageID  string `json:"message_id"`
+	ToUserID   string `json:"to_user_id"`
+	ToDeviceID string `json:"to_device_id"`
+}

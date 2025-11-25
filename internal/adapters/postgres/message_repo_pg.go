@@ -271,3 +271,56 @@ func (m *MessageRepositoryPG) GetGroupMessages(ctx context.Context, gid uuid.UUI
 
 	return result, nil
 }
+
+func (m *MessageRepositoryPG) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]*message.Message, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	const q = `SELECT
+		id,
+		sender_user_id,
+		sender_device_id,
+		recipient_user_id,
+		recipient_device_id,
+		ciphertext,
+		created_at,
+		delivered_at,
+		read_at,
+		x3dh_otpk_id,
+		ephemeral_pub_key,
+		group_id
+		FROM messages
+		WHERE id = ANY($1)`
+
+	rows, err := m.pool.Query(ctx, q, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var res []*message.Message
+	for rows.Next() {
+		var msg message.Message
+		if err := rows.Scan(
+			&msg.ID,
+			&msg.SenderUserID,
+			&msg.SenderDeviceID,
+			&msg.RecipientUserID,
+			&msg.RecipientDeviceID,
+			&msg.CipherText,
+			&msg.CreatedAt,
+			&msg.DeliveredAt,
+			&msg.ReadAt,
+			&msg.X3DHOTPKID,
+			&msg.PubKey,
+			&msg.GroupID,
+		); err != nil {
+			return nil, err
+		}
+
+		res = append(res, &msg)
+	}
+
+	return res, rows.Err()
+}
