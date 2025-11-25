@@ -21,6 +21,13 @@ func RegisterMessagesRoutes(r chi.Router, svc *messages.Service) {
 		r.Patch("/{id}", edit(svc))
 		r.Post("/{id}/react", addReaction(svc))
 		r.Delete("/{id}/react", removeReaction(svc))
+		// search
+		r.Get("/search", searchMessages(svc))
+		// pin/unpin
+		r.Post("/{id}/pin", pinMessage(svc))
+		r.Post("/{id}/unpin", unpinMessage(svc))
+		// forwarding
+		r.Post("/{id}/forward/user/{user_id}", forwardToUser(svc))
 	})
 }
 
@@ -236,5 +243,102 @@ func removeReaction(svc *messages.Service) http.HandlerFunc {
 		}
 
 		asJson(w, http.StatusOK, map[string]string{"status": "ok"})
+	}
+}
+
+func searchMessages(svc *messages.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID := UserIDFromContext(r.Context())
+		if userID == "" {
+			asError(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+
+		q := r.URL.Query().Get("q")
+		limitStr := r.URL.Query().Get("limit")
+		beforeStr := r.URL.Query().Get("before")
+
+		limit := 50
+		if limitStr != "" {
+			if v, err := strconv.Atoi(limitStr); err == nil {
+				limit = v
+			}
+		}
+
+		var before *time.Time
+		if beforeStr != "" {
+			if v, err := time.Parse(time.RFC3339, beforeStr); err == nil {
+				before = &v
+			}
+		}
+
+		msgs, err := svc.SearchMessages(r.Context(), userID, q, limit, before)
+		if err != nil {
+			asError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		asJson(w, http.StatusOK, msgs)
+	}
+}
+
+func pinMessage(svc *messages.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID := UserIDFromContext(r.Context())
+		if userID == "" {
+			asError(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+		messageID := chi.URLParam(r, "id")
+		if err := svc.PinMessage(r.Context(), userID, messageID); err != nil {
+			asError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		asJson(w, http.StatusOK, nil)
+	}
+}
+
+func unpinMessage(svc *messages.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID := UserIDFromContext(r.Context())
+		if userID == "" {
+			asError(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+		messageID := chi.URLParam(r, "id")
+		if err := svc.UnpinMessage(r.Context(), userID, messageID); err != nil {
+			asError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		asJson(w, http.StatusOK, nil)
+	}
+}
+
+func forwardToUser(svc *messages.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		actorID := UserIDFromContext(r.Context())
+		if actorID == "" {
+			asError(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+
+		deviceID := DeviceIDFromContext(r.Context())
+		if deviceID == "" {
+			asError(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+
+		srcMessageID := chi.URLParam(r, "id")
+		targetUserID := chi.URLParam(r, "user_id")
+
+		resp, err := svc.ForwardToUser(r.Context(), actorID, deviceID, srcMessageID, targetUserID)
+		if err != nil {
+			asError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		asJson(w, http.StatusOK, resp)
 	}
 }

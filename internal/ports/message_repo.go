@@ -31,4 +31,9 @@ type MessageRepository interface {
 	Edit(context.Context, uuid.UUID, string, string, *uuid.UUID) error
 	AddReaction(context.Context, uuid.UUID, uuid.UUID, string) error
 	RemoveReaction(context.Context, uuid.UUID, uuid.UUID) error
+
+	PinMessage(context.Context, uuid.UUID, uuid.UUID) error
+	UnpinMessage(context.Context, uuid.UUID, uuid.UUID) error
+
+	SearchMessages(context.Context, uuid.UUID, string, int, *time.Time) ([]*message.Message, error)
 }

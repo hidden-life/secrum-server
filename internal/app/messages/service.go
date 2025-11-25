@@ -20,6 +20,15 @@ type Service struct {
 	realtimeDelivery RealtimeDelivery
 }
 
+type MediaMetadata struct {
+	MimeType   string  `json:"mime_type"`
+	SizeBytes  int64   `json:"size_bytes"`
+	DurationMs *int    `json:"duration_ms,omitempty"`
+	Width      *int    `json:"width,omitempty"`
+	Height     *int    `json:"height,omitempty"`
+	BlurHash   *string `json:"blur_hash,omitempty"`
+}
+
 // SendRequest is input for sending message
 type SendRequest struct {
 	RecipientUserID   string  `json:"recipient_user_id"`
@@ -27,6 +36,9 @@ type SendRequest struct {
 	CipherText        string  `json:"cipher_text"`
 	X3DHOTPKID        *string `json:"x3dh_otpk_id,omitempty"`
 	PubKey            *string `json:"pub_key,omitempty"`
+
+	QuotedMessageID *string        `json:"quoted_message_id,omitempty"`
+	Media           *MediaMetadata `json:"media,omitempty"`
 }
 
 // SendResponse contains created message ID.
@@ -38,6 +50,9 @@ type SendGroupMessageRequest struct {
 	CipherText string  `json:"cipher_text"`
 	PubKey     *string `json:"pub_key,omitempty"`
 	X3DHOTPKID *string `json:"x3dh_otpk_id,omitempty"`
+
+	QuotedMessageID *string        `json:"quoted_message_id,omitempty"`
+	Media           *MediaMetadata `json:"media,omitempty"`
 }
 
 // PendingMessage is DTO for outgoing response.
@@ -50,6 +65,13 @@ type PendingMessage struct {
 	CipherText        string `json:"cipher_text"`
 	PubKey            string `json:"pub_key"`
 	CreatedAt         string `json:"created_at"`
+
+	ForwardedFromMessageID *string `json:"forwarded_from_message_id,omitempty"`
+	ForwardedFromUserID    *string `json:"forwarded_from_user_id,omitempty"`
+	QuotedMessageID        *string `json:"quoted_message_id,omitempty"`
+
+	HasMedia bool           `json:"has_media"`
+	Media    *MediaMetadata `json:"media,omitempty"`
 }
 
 // AckRequest contains message IDs to mark as delivered
@@ -124,6 +146,24 @@ func (s *Service) Send(ctx context.Context, sUserID, sDeviceID string, req *Send
 		msg.X3DHOTPKID = otpkUUID
 		if req.PubKey != nil {
 			msg.PubKey = *req.PubKey
+		}
+
+		// quoted
+		if req.QuotedMessageID != nil && *req.QuotedMessageID != "" {
+			if qid, err := uuid.Parse(*req.QuotedMessageID); err == nil {
+				msg.QuotedMessageID = &qid
+			}
+		}
+
+		// media
+		if req.Media != nil {
+			msg.HasMedia = true
+			msg.MediaMimeType = &req.Media.MimeType
+			msg.MediaSizeBytes = &req.Media.SizeBytes
+			msg.MediaDurationMs = req.Media.DurationMs
+			msg.MediaWidth = req.Media.Width
+			msg.MediaHeight = req.Media.Height
+			msg.MediaBlurHash = req.Media.BlurHash
 		}
 
 		if err := s.msgRepository.Save(ctx, msg); err != nil {
@@ -363,6 +403,24 @@ func (s *Service) SendGroupMessage(
 				msg.PubKey = *req.PubKey
 			}
 
+			// quoted
+			if req.QuotedMessageID != nil && *req.QuotedMessageID != "" {
+				if qid, err := uuid.Parse(*req.QuotedMessageID); err == nil {
+					msg.QuotedMessageID = &qid
+				}
+			}
+
+			// media
+			if req.Media != nil {
+				msg.HasMedia = true
+				msg.MediaMimeType = &req.Media.MimeType
+				msg.MediaSizeBytes = &req.Media.SizeBytes
+				msg.MediaDurationMs = req.Media.DurationMs
+				msg.MediaWidth = req.Media.Width
+				msg.MediaHeight = req.Media.Height
+				msg.MediaBlurHash = req.Media.BlurHash
+			}
+
 			out = append(out, msg)
 		}
 	}
@@ -530,4 +588,166 @@ func (s *Service) RemoveReaction(ctx context.Context, userID, msgID string) erro
 	}
 
 	return s.msgRepository.RemoveReaction(ctx, mID, uID)
+}
+
+func (s *Service) ForwardToUser(ctx context.Context, actorUserID, actorDeviceID, srcMessageID, targetUserID string) (*SendResponse, error) {
+	actorUID, err := uuid.Parse(actorUserID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid actor user id")
+	}
+	actorDevID, err := uuid.Parse(actorDeviceID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid actor device id")
+	}
+	srcMsgID, err := uuid.Parse(srcMessageID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid source message id")
+	}
+	targetUID, err := uuid.Parse(targetUserID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid target user id")
+	}
+
+	msgs, err := s.msgRepository.GetByIDs(ctx, []uuid.UUID{srcMsgID})
+	if err != nil || len(msgs) == 0 {
+		return nil, fmt.Errorf("source message not found")
+	}
+	src := msgs[0]
+
+	devices, err := s.deviceRepository.ListActiveByUser(ctx, targetUID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list active devices: %w", err)
+	}
+
+	if len(devices) == 0 {
+		return nil, fmt.Errorf("active device not found")
+	}
+
+	var first string
+	for _, d := range devices {
+		msg := message.New(actorUID, actorDevID, targetUID, d.ID, src.CipherText)
+		msg.PubKey = src.PubKey
+		msg.X3DHOTPKID = src.X3DHOTPKID
+		msg.ForwardedFromMessageID = &src.ID
+		msg.ForwardedFromUserID = &src.SenderUserID
+
+		// move metadata of media
+		msg.HasMedia = src.HasMedia
+		msg.MediaMimeType = src.MediaMimeType
+		msg.MediaSizeBytes = src.MediaSizeBytes
+		msg.MediaDurationMs = src.MediaDurationMs
+		msg.MediaWidth = src.MediaWidth
+		msg.MediaHeight = src.MediaHeight
+		msg.MediaBlurHash = src.MediaBlurHash
+
+		if err := s.msgRepository.Save(ctx, msg); err != nil {
+			return nil, fmt.Errorf("failed to save forwarded message: %w", err)
+		}
+
+		if first == "" {
+			first = msg.ID.String()
+		}
+
+		// here we can push it over realtimeDelivery hub, as in Send(...)
+	}
+
+	return &SendResponse{MessageID: first}, nil
+}
+
+func (s *Service) PinMessage(ctx context.Context, userID, messageID string) error {
+	uid, err := uuid.Parse(userID)
+	if err != nil {
+		return fmt.Errorf("invalid user id")
+	}
+	mid, err := uuid.Parse(messageID)
+	if err != nil {
+		return fmt.Errorf("invalid message id")
+	}
+
+	return s.msgRepository.PinMessage(ctx, mid, uid)
+}
+
+func (s *Service) UnpinMessage(ctx context.Context, userID, messageID string) error {
+	uid, err := uuid.Parse(userID)
+	if err != nil {
+		return fmt.Errorf("invalid user id")
+	}
+	mid, err := uuid.Parse(messageID)
+	if err != nil {
+		return fmt.Errorf("invalid message id")
+	}
+
+	return s.msgRepository.UnpinMessage(ctx, mid, uid)
+}
+
+func (s *Service) SearchMessages(ctx context.Context, userID, query string, limit int, before *time.Time) ([]PendingMessage, error) {
+	uid, err := uuid.Parse(userID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user id")
+	}
+
+	msgs, err := s.msgRepository.SearchMessages(ctx, uid, query, limit, before)
+	if err != nil {
+		return nil, fmt.Errorf("failed to search messages: %w", err)
+	}
+
+	res := make([]PendingMessage, 0, len(msgs))
+	for _, msg := range msgs {
+		pm := PendingMessage{
+			ID:                msg.ID.String(),
+			SenderDeviceID:    msg.SenderDeviceID.String(),
+			SenderUserID:      msg.SenderUserID.String(),
+			RecipientUserID:   msg.RecipientUserID.String(),
+			RecipientDeviceID: msg.RecipientDeviceID.String(),
+			CipherText:        msg.CipherText,
+			CreatedAt:         msg.CreatedAt.Format(time.RFC3339Nano),
+			PubKey:            msg.PubKey,
+		}
+
+		if msg.ForwardedFromMessageID != nil {
+			id := msg.ForwardedFromMessageID.String()
+			pm.ForwardedFromMessageID = &id
+		}
+
+		if msg.ForwardedFromUserID != nil {
+			id := msg.ForwardedFromUserID.String()
+			pm.ForwardedFromUserID = &id
+		}
+
+		if msg.QuotedMessageID != nil {
+			id := msg.QuotedMessageID.String()
+			pm.QuotedMessageID = &id
+		}
+
+		if msg.HasMedia {
+			mm := &MediaMetadata{
+				MimeType:   "",
+				SizeBytes:  0,
+				DurationMs: nil,
+				Width:      nil,
+				Height:     nil,
+				BlurHash:   nil,
+			}
+
+			if msg.MediaMimeType != nil {
+				mm.MimeType = *msg.MediaMimeType
+			}
+
+			if msg.MediaSizeBytes != nil {
+				mm.SizeBytes = *msg.MediaSizeBytes
+			}
+
+			mm.DurationMs = msg.MediaDurationMs
+			mm.Width = msg.MediaWidth
+			mm.Height = msg.MediaHeight
+			mm.BlurHash = msg.MediaBlurHash
+
+			pm.HasMedia = true
+			pm.Media = mm
+		}
+
+		res = append(res, pm)
+	}
+
+	return res, nil
 }

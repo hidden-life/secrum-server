@@ -28,6 +28,25 @@ type Message struct {
 	GroupID *uuid.UUID
 
 	Reactions map[string]string
+	EditedAt  *time.Time
+
+	// Pin
+	PinnedBy []uuid.UUID
+	PinnedAt *time.Time
+
+	// forwarding/quoting
+	ForwardedFromMessageID *uuid.UUID
+	ForwardedFromUserID    *uuid.UUID
+	QuotedMessageID        *uuid.UUID
+
+	// media metadata
+	HasMedia        bool
+	MediaMimeType   *string
+	MediaSizeBytes  *int64
+	MediaDurationMs *int
+	MediaWidth      *int
+	MediaHeight     *int
+	MediaBlurHash   *string
 }
 
 func New(senderUserID, senderDeviceID, recipientUserID, recipientDeviceID uuid.UUID, msg string) *Message {
@@ -43,5 +62,6 @@ func New(senderUserID, senderDeviceID, recipientUserID, recipientDeviceID uuid.U
 		CreatedAt:         now,
 		Reactions:         map[string]string{},
 		DeletedForMe:      []uuid.UUID{},
+		PinnedBy:          []uuid.UUID{},
 	}
 }
