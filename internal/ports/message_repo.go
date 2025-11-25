@@ -25,4 +25,5 @@ type MessageRepository interface {
 	UserChatsList(context.Context, uuid.UUID) ([]ChatSummary, error)
 	GetGroupMessages(context.Context, uuid.UUID, int, *time.Time) ([]*message.Message, error)
 	GetByIDs(context.Context, []uuid.UUID) ([]*message.Message, error)
+	GetChatHistory(context.Context, uuid.UUID, uuid.UUID, int, *time.Time) ([]*message.Message, error)
 }

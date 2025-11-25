@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/hidden-life/secrum-server/internal/app/messages"
@@ -14,7 +15,44 @@ func RegisterMessagesRoutes(r chi.Router, svc *messages.Service) {
 		r.Post("/send", sendHandler(svc))
 		r.Get("/pending", pendingHandler(svc))
 		r.Post("/ack", ackHandler(svc))
+		r.Get("/history/{peer_id}", getChatHistoryHandler(svc))
 	})
+}
+
+func getChatHistoryHandler(svc *messages.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID := UserIDFromContext(r.Context())
+		if userID == "" {
+			asError(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+
+		peerID := chi.URLParam(r, "peer_id")
+		limitStr := r.URL.Query().Get("limit")
+		beforeStr := r.URL.Query().Get("before")
+
+		limit := 50
+		if limitStr != "" {
+			if v, err := strconv.Atoi(limitStr); err == nil && v > 0 {
+				limit = v
+			}
+		}
+
+		var before *time.Time
+		if beforeStr != "" {
+			if v, err := time.Parse(time.RFC3339Nano, beforeStr); err == nil {
+				before = &v
+			}
+		}
+
+		msgs, err := svc.GetChatHistory(r.Context(), userID, peerID, limit, before)
+		if err != nil {
+			asError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		asJson(w, http.StatusOK, msgs)
+	}
 }
 
 func ackHandler(svc *messages.Service) http.HandlerFunc {

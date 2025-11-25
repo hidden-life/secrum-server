@@ -419,3 +419,36 @@ func (s *Service) FetchGroupHistory(ctx context.Context, gid string, limit int, 
 
 	return res, nil
 }
+
+func (s *Service) GetChatHistory(ctx context.Context, userID, peerID string, limit int, before *time.Time) ([]PendingMessage, error) {
+	uid, err := uuid.Parse(userID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user id")
+	}
+
+	pid, err := uuid.Parse(peerID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid peer id")
+	}
+
+	msgs, err := s.msgRepository.GetChatHistory(ctx, uid, pid, limit, before)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch chat history: %w", err)
+	}
+
+	out := make([]PendingMessage, 0, len(msgs))
+	for _, m := range msgs {
+		out = append(out, PendingMessage{
+			ID:                m.ID.String(),
+			SenderDeviceID:    m.SenderDeviceID.String(),
+			SenderUserID:      m.SenderUserID.String(),
+			RecipientUserID:   m.RecipientUserID.String(),
+			RecipientDeviceID: m.RecipientDeviceID.String(),
+			CipherText:        m.CipherText,
+			CreatedAt:         m.CreatedAt.Format(time.RFC3339Nano),
+			PubKey:            m.PubKey,
+		})
+	}
+
+	return out, nil
+}

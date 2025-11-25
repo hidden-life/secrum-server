@@ -324,3 +324,68 @@ func (m *MessageRepositoryPG) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]
 
 	return res, rows.Err()
 }
+
+func (m *MessageRepositoryPG) GetChatHistory(ctx context.Context, userID, peerID uuid.UUID, limit int, before *time.Time) ([]*message.Message, error) {
+	q := `SELECT
+		id,
+		sender_user_id,
+		sender_device_id,
+		recipient_user_id,
+		recipient_device_id,
+		ciphertext,
+		created_at,
+		delivered_at,
+		read_at,
+		x3dh_otpk_id,
+		ephemeral_pub_key,
+		group_id
+		FROM messages
+		WHERE (
+		    sender_user_id = $1 AND recipient_user_id = $2
+		) OR (
+		    sender_user_id = $2 AND recipient_user_id = $1
+		)`
+
+	args := []any{userID, peerID}
+	idx := 3
+
+	if before != nil {
+		q += fmt.Sprintf(" AND created_at < $%d", idx)
+		args = append(args, *before)
+		idx++
+	}
+
+	q += fmt.Sprintf(" ORDER BY created_at DESC LIMIT $%d", idx)
+	args = append(args, limit)
+
+	rows, err := m.pool.Query(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []*message.Message
+	for rows.Next() {
+		var msg message.Message
+		if err := rows.Scan(
+			&msg.ID,
+			&msg.SenderUserID,
+			&msg.SenderDeviceID,
+			&msg.RecipientUserID,
+			&msg.RecipientDeviceID,
+			&msg.CipherText,
+			&msg.CreatedAt,
+			&msg.DeliveredAt,
+			&msg.ReadAt,
+			&msg.X3DHOTPKID,
+			&msg.PubKey,
+			&msg.GroupID,
+		); err != nil {
+			return nil, err
+		}
+
+		result = append(result, &msg)
+	}
+
+	return result, rows.Err()
+}
