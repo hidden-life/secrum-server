@@ -26,4 +26,9 @@ type MessageRepository interface {
 	GetGroupMessages(context.Context, uuid.UUID, int, *time.Time) ([]*message.Message, error)
 	GetByIDs(context.Context, []uuid.UUID) ([]*message.Message, error)
 	GetChatHistory(context.Context, uuid.UUID, uuid.UUID, int, *time.Time) ([]*message.Message, error)
+	DeleteForAll(context.Context, uuid.UUID) error
+	DeleteForMe(context.Context, uuid.UUID, uuid.UUID) error
+	Edit(context.Context, uuid.UUID, string, string, *uuid.UUID) error
+	AddReaction(context.Context, uuid.UUID, uuid.UUID, string) error
+	RemoveReaction(context.Context, uuid.UUID, uuid.UUID) error
 }

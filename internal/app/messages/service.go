@@ -58,6 +58,12 @@ type AckRequest struct {
 	Read      []string `json:"read,omitempty"`
 }
 
+type EditMessageRequest struct {
+	CipherText string  `json:"text"`
+	PubKey     string  `json:"pub_key,omitempty"`
+	OTPK       *string `json:"x3dh_otpk_id,omitempty"`
+}
+
 func NewService(
 	log *zap.Logger,
 	msgRepository ports.MessageRepository,
@@ -451,4 +457,77 @@ func (s *Service) GetChatHistory(ctx context.Context, userID, peerID string, lim
 	}
 
 	return out, nil
+}
+
+func (s *Service) DeleteForMe(ctx context.Context, userID, msgID string) error {
+	uID, err := uuid.Parse(userID)
+	if err != nil {
+		return fmt.Errorf("invalid user id")
+	}
+
+	mID, err := uuid.Parse(msgID)
+	if err != nil {
+		return fmt.Errorf("invalid message id")
+	}
+
+	return s.msgRepository.DeleteForMe(ctx, uID, mID)
+}
+
+func (s *Service) DeleteForAll(ctx context.Context, actorID, msgID string) error {
+	_, err := uuid.Parse(actorID)
+	if err != nil {
+		return fmt.Errorf("invalid user id")
+	}
+
+	mID, err := uuid.Parse(msgID)
+	if err != nil {
+		return fmt.Errorf("invalid message id")
+	}
+
+	// here we can add permissions later
+
+	return s.msgRepository.DeleteForAll(ctx, mID)
+}
+
+func (s *Service) EditMessage(ctx context.Context, msgID string, req EditMessageRequest) error {
+	mID, err := uuid.Parse(msgID)
+	if err != nil {
+		return fmt.Errorf("invalid message id")
+	}
+
+	var otpk *uuid.UUID
+	if req.OTPK != nil {
+		id, _ := uuid.Parse(*req.OTPK)
+		otpk = &id
+	}
+
+	return s.msgRepository.Edit(ctx, mID, req.CipherText, req.PubKey, otpk)
+}
+
+func (s *Service) AddReaction(ctx context.Context, userID, msgID, emoji string) error {
+	uID, err := uuid.Parse(userID)
+	if err != nil {
+		return fmt.Errorf("invalid user id")
+	}
+
+	mID, err := uuid.Parse(msgID)
+	if err != nil {
+		return fmt.Errorf("invalid message id")
+	}
+
+	return s.msgRepository.AddReaction(ctx, mID, uID, emoji)
+}
+
+func (s *Service) RemoveReaction(ctx context.Context, userID, msgID string) error {
+	uID, err := uuid.Parse(userID)
+	if err != nil {
+		return fmt.Errorf("invalid user id")
+	}
+
+	mID, err := uuid.Parse(msgID)
+	if err != nil {
+		return fmt.Errorf("invalid message id")
+	}
+
+	return s.msgRepository.RemoveReaction(ctx, mID, uID)
 }

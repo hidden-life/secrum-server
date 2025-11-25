@@ -389,3 +389,45 @@ func (m *MessageRepositoryPG) GetChatHistory(ctx context.Context, userID, peerID
 
 	return result, rows.Err()
 }
+
+func (m *MessageRepositoryPG) DeleteForAll(ctx context.Context, msgID uuid.UUID) error {
+	const q = `UPDATE messages SET deleted_for_all = TRUE WHERE id = $1`
+
+	_, err := m.pool.Exec(ctx, q, msgID)
+
+	return err
+}
+
+func (m *MessageRepositoryPG) DeleteForMe(ctx context.Context, msgID uuid.UUID, userID uuid.UUID) error {
+	const q = `UPDATE messages
+			SET deleted_for_me = array_append(deleted_for_me, $2)
+			WHERE id = $1 AND NOT (deleted_for_me @> ARRAY[$2])`
+
+	_, err := m.pool.Exec(ctx, q, msgID, userID)
+
+	return err
+}
+
+func (m *MessageRepositoryPG) Edit(ctx context.Context, msgID uuid.UUID, txt string, pubKey string, otpk *uuid.UUID) error {
+	const q = `UPDATE messages SET ciphertext = $2, ephemeral_pub_key = $3, x3dh_otpk_id = $4, edited_at = NOW() WHERE id = $1`
+
+	_, err := m.pool.Exec(ctx, q, msgID, txt, pubKey, otpk)
+
+	return err
+}
+
+func (m *MessageRepositoryPG) AddReaction(ctx context.Context, msgID uuid.UUID, userID uuid.UUID, emoji string) error {
+	const q = `UPDATE messages SET reactions = jsonb_set(reactions, ARRAY[$2], to_jsonb($3::text), true) WHERE id = $1`
+
+	_, err := m.pool.Exec(ctx, q, msgID, userID, emoji)
+
+	return err
+}
+
+func (m *MessageRepositoryPG) RemoveReaction(ctx context.Context, msgID uuid.UUID, userID uuid.UUID) error {
+	const q = `UPDATE messages SET reactions = reactions - $2 WHERE id = $1`
+
+	_, err := m.pool.Exec(ctx, q, msgID, userID)
+
+	return err
+}

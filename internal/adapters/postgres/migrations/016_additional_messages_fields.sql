@@ -1,0 +1,5 @@
+ALTER TABLE messages
+    ADD COLUMN edited_at TIMESTAMPTZ NULL,
+    ADD COLUMN deleted_for_all BOOLEAN NOT NULL DEFAULT FALSE,
+    ADD COLUMN deleted_for_me UUID[] NOT NULL DEFAULT '{}',
+    ADD COLUMN reactions JSONB NOT NULL DEFAULT '{}'::jsonb;

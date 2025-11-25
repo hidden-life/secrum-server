@@ -16,6 +16,11 @@ func RegisterMessagesRoutes(r chi.Router, svc *messages.Service) {
 		r.Get("/pending", pendingHandler(svc))
 		r.Post("/ack", ackHandler(svc))
 		r.Get("/history/{peer_id}", getChatHistoryHandler(svc))
+		r.Delete("/{id}/me", deleteForMe(svc))
+		r.Delete("/{id}/all", deleteForAll(svc))
+		r.Patch("/{id}", edit(svc))
+		r.Post("/{id}/react", addReaction(svc))
+		r.Delete("/{id}/react", removeReaction(svc))
 	})
 }
 
@@ -126,5 +131,110 @@ func sendHandler(svc *messages.Service) http.HandlerFunc {
 		}
 
 		asJson(w, http.StatusOK, resp)
+	}
+}
+
+func deleteForMe(svc *messages.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID := UserIDFromContext(r.Context())
+		if userID == "" {
+			asError(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+
+		messageID := chi.URLParam(r, "id")
+		if err := svc.DeleteForMe(r.Context(), userID, messageID); err != nil {
+			asError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		asJson(w, http.StatusNoContent, nil)
+	}
+}
+
+func deleteForAll(svc *messages.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID := UserIDFromContext(r.Context())
+		if userID == "" {
+			asError(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+
+		messageID := chi.URLParam(r, "id")
+		if err := svc.DeleteForAll(r.Context(), userID, messageID); err != nil {
+			asError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		asJson(w, http.StatusNoContent, nil)
+	}
+}
+
+func edit(svc *messages.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID := UserIDFromContext(r.Context())
+		if userID == "" {
+			asError(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+
+		var req messages.EditMessageRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			asError(w, http.StatusBadRequest, "failed to decode request body")
+			return
+		}
+
+		messageID := chi.URLParam(r, "id")
+		if err := svc.EditMessage(r.Context(), messageID, req); err != nil {
+			asError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		asJson(w, http.StatusOK, map[string]string{"status": "ok"})
+	}
+}
+
+func addReaction(svc *messages.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID := UserIDFromContext(r.Context())
+		if userID == "" {
+			asError(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+
+		messageID := chi.URLParam(r, "id")
+		var body struct {
+			Emoji string `json:"emoji"`
+		}
+
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			asError(w, http.StatusBadRequest, "failed to decode request body")
+			return
+		}
+
+		if err := svc.AddReaction(r.Context(), userID, messageID, body.Emoji); err != nil {
+			asError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		asJson(w, http.StatusOK, map[string]string{"status": "ok"})
+	}
+}
+
+func removeReaction(svc *messages.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID := UserIDFromContext(r.Context())
+		if userID == "" {
+			asError(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+
+		messageID := chi.URLParam(r, "id")
+		if err := svc.RemoveReaction(r.Context(), userID, messageID); err != nil {
+			asError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		asJson(w, http.StatusOK, map[string]string{"status": "ok"})
 	}
 }
