@@ -104,10 +104,7 @@ func wsHandler(
 			UserID: userID,
 			Status: "online",
 		}
-		raw, err := json.Marshal(real_time.OutEnvelope{
-			Type: "status",
-			Data: status,
-		})
+		raw, err := real_time.MarshalEvent("status", status)
 
 		if err == nil {
 			_ = hub.Broadcast(r.Context(), raw)
@@ -137,10 +134,7 @@ func wsHandler(
 				Status: "offline",
 			}
 
-			raw, err := json.Marshal(real_time.OutEnvelope{
-				Type: "status",
-				Data: status,
-			})
+			raw, err := real_time.MarshalEvent("status", status)
 			if err == nil {
 				_ = hub.Broadcast(context.Background(), raw)
 			}
@@ -294,7 +288,7 @@ func wsReader(
 					continue
 				}
 
-				raw, err := json.Marshal(req)
+				raw, err := real_time.MarshalEvent("typing", req)
 				if err == nil {
 					_ = hub.PushToUser(ctx, peerUUID, raw)
 				}
@@ -304,7 +298,7 @@ func wsReader(
 					continue
 				}
 
-				raw, err := json.Marshal(req)
+				raw, err := real_time.MarshalEvent("typing", req)
 				if err == nil {
 					_ = hub.PushToGroup(ctx, gid, raw)
 				}

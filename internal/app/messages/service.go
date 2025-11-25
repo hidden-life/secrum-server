@@ -2,7 +2,6 @@ package messages
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -140,10 +139,7 @@ func (s *Service) Send(ctx context.Context, sUserID, sDeviceID string, req *Send
 			CreatedAt:         msg.CreatedAt.Format(time.RFC3339Nano),
 		}
 
-		buff, err := json.Marshal(real_time.OutEnvelope{
-			Type: "message",
-			Data: e,
-		})
+		buff, err := real_time.MarshalEvent("message", e)
 
 		if err == nil {
 			_ = s.realtimeDelivery.PushToDevice(ctx, msg.RecipientDeviceID, buff)
@@ -280,7 +276,7 @@ func (s *Service) AckDelivered(ctx context.Context, deviceID string, req AckRequ
 					Data: e,
 				}
 
-				raw, err := json.Marshal(env)
+				raw, err := real_time.MarshalEvent("ack_delivered", env)
 				if err == nil {
 					_ = s.realtimeDelivery.PushToDevice(ctx, msg.SenderDeviceID, raw)
 				} else {
@@ -301,7 +297,7 @@ func (s *Service) AckDelivered(ctx context.Context, deviceID string, req AckRequ
 					Data: e,
 				}
 
-				raw, err := json.Marshal(env)
+				raw, err := real_time.MarshalEvent("ack_read", env)
 				if err == nil {
 					_ = s.realtimeDelivery.PushToDevice(ctx, msg.SenderDeviceID, raw)
 				} else {
@@ -382,10 +378,7 @@ func (s *Service) SendGroupMessage(
 			GroupID:           gID.String(),
 		}
 
-		buff, err := json.Marshal(real_time.OutEnvelope{
-			Type: "group_message",
-			Data: e,
-		})
+		buff, err := real_time.MarshalEvent("group_message", e)
 		if err == nil {
 			_ = s.realtimeDelivery.PushToDevice(ctx, msg.RecipientDeviceID, buff)
 		}
