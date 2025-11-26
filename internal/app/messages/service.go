@@ -18,6 +18,7 @@ type Service struct {
 	userRepository   ports.UserRepository
 	deviceRepository ports.DeviceRepository
 	realtimeDelivery RealtimeDelivery
+	syncRepository   ports.SyncEventRepository
 }
 
 type MediaMetadata struct {
@@ -99,6 +100,7 @@ func NewService(
 	userRepository ports.UserRepository,
 	deviceRepository ports.DeviceRepository,
 	realtime RealtimeDelivery,
+	syncRepository ports.SyncEventRepository,
 ) *Service {
 	return &Service{
 		log:              log,
@@ -106,6 +108,7 @@ func NewService(
 		userRepository:   userRepository,
 		deviceRepository: deviceRepository,
 		realtimeDelivery: realtime,
+		syncRepository:   syncRepository,
 	}
 }
 
@@ -353,6 +356,13 @@ func (s *Service) AckDelivered(ctx context.Context, deviceID string, req AckRequ
 				} else {
 					s.log.Warn("failed to marshal ack_delivered event", zap.Error(err))
 				}
+
+				// sync
+				if s.syncRepository != nil {
+					if _, err := s.syncRepository.Append(ctx, msg.SenderUserID, "ack_delivered", e); err != nil {
+						s.log.Warn("failed to append ack_delivered event", zap.Error(err))
+					}
+				}
 			}
 
 			// ack read
@@ -373,6 +383,13 @@ func (s *Service) AckDelivered(ctx context.Context, deviceID string, req AckRequ
 					_ = s.realtimeDelivery.PushToDevice(ctx, msg.SenderDeviceID, raw)
 				} else {
 					s.log.Warn("failed to marshal ack_read event", zap.Error(err))
+				}
+
+				// sync
+				if s.syncRepository != nil {
+					if _, err := s.syncRepository.Append(ctx, msg.SenderUserID, "ack_read", e); err != nil {
+						s.log.Warn("failed to append ack_read event", zap.Error(err))
+					}
 				}
 			}
 		}

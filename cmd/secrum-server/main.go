@@ -23,6 +23,7 @@ import (
 	"github.com/hidden-life/secrum-server/internal/app/keys"
 	"github.com/hidden-life/secrum-server/internal/app/messages"
 	"github.com/hidden-life/secrum-server/internal/app/profile"
+	"github.com/hidden-life/secrum-server/internal/app/sync"
 	"github.com/hidden-life/secrum-server/internal/config"
 	"github.com/hidden-life/secrum-server/internal/logger"
 	"github.com/hidden-life/secrum-server/internal/presence"
@@ -85,6 +86,8 @@ func main() {
 	msgRepo := postgres.NewMessageRepository(pool)
 	rtHub := real_time.NewDeliveryHub(log)
 	msgSvc := messages.NewService(log, msgRepo, userRepo, deviceRepo, rtHub)
+	// chat state
+	chatStateRepo := postgres.NewChatStateRepository(pool)
 
 	// auth middleware
 	authMW := http.AuthMiddleware(tokenManager)
@@ -102,7 +105,10 @@ func main() {
 	contactRepo := postgres.NewContactRepository(pool)
 	contactSvc := contact.NewService(userRepo, contactRepo)
 	// Chats
-	chatSvc := chats.NewService(log, msgRepo, userRepo)
+	chatSvc := chats.NewService(log, msgRepo, userRepo, chatStateRepo)
+
+	syncRepo := postgres.NewSyncEventRepository(pool)
+	syncSvc := sync.NewService(log, chatSvc, syncRepo)
 
 	groupRepo := postgres.NewGroupRepository(pool)
 	groupMemberRepo := postgres.NewGroupMemberRepository(pool)
@@ -123,6 +129,7 @@ func main() {
 		http.RegisterDevicesRoutes(r, deviceSvc)
 		http.RegisterGroupsRoutes(r, groupSvc, msgSvc)
 		http.RegisterAttachmentsRoutes(r, attachmentSvc)
+		http.RegisterSyncEventRoutes(r, syncSvc)
 
 		http.RegisterWSRoutes(r, log, rtHub, msgSvc, presenceSvc)
 	})
