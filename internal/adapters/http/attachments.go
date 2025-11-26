@@ -29,14 +29,14 @@ func uploadAttachmentHandler(svc *attachments.Service) http.HandlerFunc {
 			mimeType *string
 		)
 
-		if sizeStr := r.Header.Get("X-File-Size"); sizeStr != "" {
-			if v, err := strconv.ParseInt(sizeStr, 10, 64); err == nil {
-				fileSize = &v
-			}
+		if ct := r.Header.Get("Content-Type"); ct != "" {
+			mimeType = &ct
 		}
 
-		if mt := r.Header.Get("X-Mime-Type"); mt != "" {
-			mimeType = &mt
+		if cl := r.Header.Get("Content-Length"); cl != "" {
+			if v, err := strconv.ParseInt(cl, 10, 64); err == nil {
+				fileSize = &v
+			}
 		}
 
 		res, err := svc.Upload(r.Context(), userID, r.Body, fileSize, mimeType)
@@ -70,16 +70,18 @@ func downloadAttachmentHandler(svc *attachments.Service) http.HandlerFunc {
 		}
 		defer info.Reader.Close()
 
-		if info.MimeType != nil {
+		if info.MimeType != nil && *info.MimeType != "" {
 			w.Header().Set("Content-Type", *info.MimeType)
 		} else {
 			w.Header().Set("Content-Type", "application/octet-stream")
 		}
-		if info.Size != nil {
+
+		if info.Size != nil && *info.Size > 0 {
 			w.Header().Set("Content-Length", strconv.FormatInt(*info.Size, 10))
 		}
 
-		w.WriteHeader(http.StatusOK)
-		_, _ = io.Copy(w, info.Reader)
+		if _, err := io.Copy(w, info.Reader); err != nil {
+			return
+		}
 	}
 }

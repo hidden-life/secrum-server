@@ -10,5 +10,5 @@ import (
 type AttachmentRepository interface {
 	Create(context.Context, *attachment.Attachment) error
 	GetByID(context.Context, uuid.UUID) (*attachment.Attachment, error)
-	MarDeleted(context.Context, uuid.UUID) error
+	MarkDeleted(context.Context, uuid.UUID) error
 }

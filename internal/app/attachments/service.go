@@ -111,7 +111,12 @@ func (s *Service) Upload(ctx context.Context, uploaderID string, r io.Reader, fi
 
 func (s *Service) Download(ctx context.Context, userID, attachmentID string) (*DownloadInfo, error) {
 	if userID == "" {
-		return nil, fmt.Errorf("empty uploader id")
+		return nil, fmt.Errorf("empty user id")
+	}
+
+	uid, err := uuid.Parse(userID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid user id")
 	}
 
 	id, err := uuid.Parse(attachmentID)
@@ -126,6 +131,10 @@ func (s *Service) Download(ctx context.Context, userID, attachmentID string) (*D
 
 	if a == nil || a.IsDeleted {
 		return nil, fmt.Errorf("attachment does not exist")
+	}
+
+	if a.UploadedBy != uid {
+		return nil, fmt.Errorf("access forbidden")
 	}
 
 	rc, err := s.storage.Open(ctx, a.BlobPath)

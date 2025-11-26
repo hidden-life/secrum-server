@@ -56,7 +56,7 @@ func (r *AttachmentRepositoryPG) GetByID(ctx context.Context, id uuid.UUID) (*at
 	return &a, nil
 }
 
-func (r *AttachmentRepositoryPG) MarDeleted(ctx context.Context, id uuid.UUID) error {
+func (r *AttachmentRepositoryPG) MarkDeleted(ctx context.Context, id uuid.UUID) error {
 	const q = `UPDATE attachments SET is_deleted = TRUE WHERE id = $1`
 	_, err := r.pool.Exec(ctx, q, id)
 	return err

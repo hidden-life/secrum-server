@@ -85,7 +85,6 @@ func main() {
 	// message repository
 	msgRepo := postgres.NewMessageRepository(pool)
 	rtHub := real_time.NewDeliveryHub(log)
-	msgSvc := messages.NewService(log, msgRepo, userRepo, deviceRepo, rtHub)
 	// chat state
 	chatStateRepo := postgres.NewChatStateRepository(pool)
 
@@ -109,6 +108,8 @@ func main() {
 
 	syncRepo := postgres.NewSyncEventRepository(pool)
 	syncSvc := sync.NewService(log, chatSvc, syncRepo)
+
+	msgSvc := messages.NewService(log, msgRepo, userRepo, deviceRepo, rtHub, syncRepo)
 
 	groupRepo := postgres.NewGroupRepository(pool)
 	groupMemberRepo := postgres.NewGroupMemberRepository(pool)
