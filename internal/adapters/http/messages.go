@@ -16,11 +16,11 @@ func RegisterMessagesRoutes(r chi.Router, svc *messages.Service) {
 		r.Get("/pending", pendingHandler(svc))
 		r.Post("/ack", ackHandler(svc))
 		r.Get("/history/{peer_id}", getChatHistoryHandler(svc))
-		r.Delete("/{id}/me", deleteForMe(svc))
-		r.Delete("/{id}/all", deleteForAll(svc))
+		r.Delete("/{id}/delete/me", deleteForMe(svc))
+		r.Delete("/{id}/delete/all", deleteForAll(svc))
 		r.Patch("/{id}", edit(svc))
-		r.Post("/{id}/react", addReaction(svc))
-		r.Delete("/{id}/react", removeReaction(svc))
+		r.Post("/{id}/reaction/add", addReaction(svc))
+		r.Delete("/{id}/reaction/remove", removeReaction(svc))
 		// search
 		r.Get("/search", searchMessages(svc))
 		// pin/unpin
