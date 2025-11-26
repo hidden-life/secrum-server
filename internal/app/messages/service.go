@@ -62,9 +62,16 @@ type PendingMessage struct {
 	SenderDeviceID    string `json:"sender_device_id"`
 	RecipientUserID   string `json:"recipient_user_id"`
 	RecipientDeviceID string `json:"recipient_device_id"`
-	CipherText        string `json:"cipher_text"`
-	PubKey            string `json:"pub_key"`
-	CreatedAt         string `json:"created_at"`
+
+	CipherText string `json:"cipher_text"`
+	PubKey     string `json:"pub_key"`
+	CreatedAt  string `json:"created_at"`
+
+	DeliveredAt *string `json:"delivered_at,omitempty"`
+	ReadAt      *string `json:"read_at,omitempty"`
+
+	IsEdited  bool `json:"is_edited"`
+	IsDeleted bool `json:"is_deleted"`
 
 	ForwardedFromMessageID *string `json:"forwarded_from_message_id,omitempty"`
 	ForwardedFromUserID    *string `json:"forwarded_from_user_id,omitempty"`
@@ -223,6 +230,18 @@ func (s *Service) FetchPending(ctx context.Context, deviceID string, limit int) 
 
 	res := make([]PendingMessage, 0, len(msgs))
 	for _, m := range msgs {
+		var deliveredAt *string
+		if m.DeliveredAt != nil {
+			v := m.DeliveredAt.Format(time.RFC3339Nano)
+			deliveredAt = &v
+		}
+
+		var readAt *string
+		if m.ReadAt != nil {
+			v := m.ReadAt.Format(time.RFC3339Nano)
+			readAt = &v
+		}
+
 		res = append(res, PendingMessage{
 			ID:                m.ID.String(),
 			SenderDeviceID:    m.SenderDeviceID.String(),
@@ -232,6 +251,12 @@ func (s *Service) FetchPending(ctx context.Context, deviceID string, limit int) 
 			RecipientDeviceID: m.RecipientDeviceID.String(),
 			CreatedAt:         m.CreatedAt.Format(time.RFC3339Nano),
 			PubKey:            m.PubKey,
+
+			DeliveredAt: deliveredAt,
+			ReadAt:      readAt,
+
+			IsEdited:  m.IsEdited,
+			IsDeleted: m.IsDeleted,
 		})
 	}
 

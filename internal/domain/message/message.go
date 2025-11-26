@@ -47,6 +47,9 @@ type Message struct {
 	MediaWidth      *int
 	MediaHeight     *int
 	MediaBlurHash   *string
+
+	IsEdited  bool
+	IsDeleted bool
 }
 
 func New(senderUserID, senderDeviceID, recipientUserID, recipientDeviceID uuid.UUID, msg string) *Message {

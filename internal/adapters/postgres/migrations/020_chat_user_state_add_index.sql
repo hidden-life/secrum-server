@@ -1,0 +1,1 @@
+CREATE INDEX idx_chat_state_user ON chat_user_state(user_id);
