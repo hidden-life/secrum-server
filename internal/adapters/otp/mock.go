@@ -20,7 +20,7 @@ func NewMockProvider(logger *zap.Logger, env string) ports.OTPProvider {
 }
 
 func (m *MockProvider) Deliver(_ context.Context, destination, code string) error {
-	if m.env != "production" {
+	if m.env != "prod" {
 		m.logger.Info("Mock OTP delivery", zap.String("destination", destination), zap.String("code", code))
 	}
 	return nil

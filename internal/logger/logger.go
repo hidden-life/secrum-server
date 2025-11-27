@@ -7,7 +7,7 @@ import (
 func New(env, level string) *zap.Logger {
 	var cfg zap.Config
 
-	if env == "production" {
+	if env == "prod" {
 		cfg = zap.NewProductionConfig()
 	} else {
 		cfg = zap.NewDevelopmentConfig()

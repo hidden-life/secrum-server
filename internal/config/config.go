@@ -1,9 +1,11 @@
 package config
 
 import (
-	"log"
+	"fmt"
 	"os"
-	"strconv"
+
+	"github.com/joho/godotenv"
+	"github.com/spf13/viper"
 )
 
 // Config holds global application configuration
@@ -22,47 +24,65 @@ type Config struct {
 	JWTRefreshSecret     string
 	JWTAccessTTLMinutes  int
 	JWTRefreshTTLMinutes int
-}
 
-// getEnv retrieves the value of the environment variable named by the key.
-func getEnv(key, fallbackStr string) string {
-	if value, exists := os.LookupEnv(key); exists {
-		return value
-	}
-
-	return fallbackStr
-}
-
-// getEnvInt retrieves the integer value of the environment variable named by the key.
-func getEnvInt(key string, fallbackInt int) int {
-	if value, exists := os.LookupEnv(key); exists {
-		if n, err := strconv.Atoi(value); err == nil {
-			return n
-		}
-	}
-	return fallbackInt
+	MaxUploadMB int
 }
 
 // LoadConfig loads configuration from environment variables with defaults
 func LoadConfig() *Config {
-	cfg := &Config{
-		ApplicationName: getEnv("APP_NAME", "SecrumServer"),
-		ApplicationEnv:  getEnv("APP_ENV", "dev"),
-		HTTPPort:        getEnv("HTTP_PORT", "8080"),
-		LogLevel:        getEnv("LOG_LEVEL", "info"),
+	// load .env (optional)
+	_ = godotenv.Load()
 
-		DatabaseURL:  getEnv("DATABASE_URL", "postgres://secrum_user:secrum_password@localhost:5432/secrum_db?sslmode=disable"),
-		RedisAddress: getEnv("REDIS_ADDR", "localhost:6379"),
-
-		FileStorageDir: getEnv("FILE_STORAGE_DIR", "attachments"),
-
-		JWTAccessSecret:      getEnv("JWT_ACCESS_SECRET", "dev_access_secret"),
-		JWTRefreshSecret:     getEnv("JWT_REFRESH_SECRET", "dev_refresh_secret"),
-		JWTAccessTTLMinutes:  getEnvInt("JWT_ACCESS_TTL_MINUTES", 15),     // 15 minutes
-		JWTRefreshTTLMinutes: getEnvInt("JWT_REFRESH_TTL_MINUTES", 60*24), // 24 hours
+	env := os.Getenv("APP_ENV")
+	if env == "" {
+		env = "dev"
 	}
 
-	log.Printf("[CONFIG] Loaded configuration for %s (%s)", cfg.ApplicationName, cfg.ApplicationEnv)
+	v := viper.New()
+	v.SetConfigName(fmt.Sprintf("config.%s", env))
+	v.SetConfigType("yaml")
+	v.AddConfigPath("config")
+	v.AddConfigPath(".")
+	v.AutomaticEnv()
+
+	// env mapping
+	_ = v.BindEnv("database.url", "DB_URL")
+	_ = v.BindEnv("jwt.access_secret", "JWT_ACCESS_SECRET")
+	_ = v.BindEnv("jwt.refresh_secret", "JWT_REFRESH_SECRET")
+	_ = v.BindEnv("redis.addr", "REDIS_ADDR")
+	_ = v.BindEnv("http.port", "HTTP_PORT")
+
+	if err := v.ReadInConfig(); err != nil {
+		panic(fmt.Errorf("fatal error config: %w", err))
+	}
+
+	cfg := &Config{
+		ApplicationName:      v.GetString("app.name"),
+		ApplicationEnv:       v.GetString("app.env"),
+		HTTPPort:             v.GetString("http.port"),
+		DatabaseURL:          v.GetString("database.url"),
+		RedisAddress:         v.GetString("redis.addr"),
+		JWTAccessSecret:      v.GetString("jwt.access_secret"),
+		JWTRefreshSecret:     v.GetString("jwt.refresh_secret"),
+		JWTAccessTTLMinutes:  v.GetInt("jwt.access_ttl_minutes"),
+		JWTRefreshTTLMinutes: v.GetInt("jwt.refresh_ttl_minutes"),
+		FileStorageDir:       v.GetString("storage.local_dir"),
+		MaxUploadMB:          v.GetInt("security.max_upload_mb"),
+	}
+
+	validate(cfg)
 
 	return cfg
+}
+
+func validate(cfg *Config) {
+	assert(cfg.DatabaseURL, "database.url")
+	assert(cfg.JWTAccessSecret, "jwt.access_secret")
+	assert(cfg.JWTRefreshSecret, "jwt.refresh_secret")
+}
+
+func assert(val, name string) {
+	if val == "" {
+		panic("config field is required: " + name)
+	}
 }

@@ -107,7 +107,7 @@ func (s *Service) BeginRegistration(ctx context.Context, req BeginRegistrationRe
 		RequestID: requestID,
 	}
 
-	if s.env != "production" {
+	if s.env != "prod" {
 		resp.Code = code
 	}
 
