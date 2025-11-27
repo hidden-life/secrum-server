@@ -30,19 +30,22 @@ type Config struct {
 
 // LoadConfig loads configuration from environment variables with defaults
 func LoadConfig() *Config {
+	flags := ParseFlags()
 	// load .env (optional)
 	_ = godotenv.Load()
 
-	env := os.Getenv("APP_ENV")
-	if env == "" {
-		env = "dev"
-	}
+	env := pick(flags.Env, os.Getenv("APP_ENV"), "dev")
 
 	v := viper.New()
-	v.SetConfigName(fmt.Sprintf("config.%s", env))
 	v.SetConfigType("yaml")
-	v.AddConfigPath("config")
-	v.AddConfigPath(".")
+	if flags.ConfigPath != "" {
+		v.SetConfigFile(flags.ConfigPath)
+	} else {
+		v.SetConfigName(fmt.Sprintf("config.%s", env))
+		v.AddConfigPath("config")
+		v.AddConfigPath(".")
+	}
+
 	v.AutomaticEnv()
 
 	// env mapping
@@ -70,6 +73,7 @@ func LoadConfig() *Config {
 		MaxUploadMB:          v.GetInt("security.max_upload_mb"),
 	}
 
+	overrideByFlags(cfg, flags)
 	validate(cfg)
 
 	return cfg
@@ -85,4 +89,14 @@ func assert(val, name string) {
 	if val == "" {
 		panic("config field is required: " + name)
 	}
+}
+
+func pick(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
+	}
+
+	return ""
 }
