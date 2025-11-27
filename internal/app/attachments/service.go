@@ -24,6 +24,8 @@ type Service struct {
 	groupMemberRepository ports.GroupMemberRepository
 	basePath              string
 	maxSize               int64
+
+	mimePolicy *MimePolicy
 }
 
 type UploadResultResponse struct {
@@ -37,6 +39,15 @@ type DownloadInfo struct {
 	MimeType *string
 	Size     *int64
 	Reader   io.ReadCloser
+}
+
+var defaultSystemAllowedMimes = []string{
+	"image/jpeg",
+	"image/png",
+	"image/webp",
+	"image/gif",
+	"video/mp4",
+	"application/pdf",
 }
 
 func NewService(
@@ -62,6 +73,8 @@ func NewService(
 		messageRepository:     msgRepo,
 		groupRepository:       groupRepo,
 		groupMemberRepository: groupMemberRepo,
+
+		mimePolicy: NewMimePolicy(defaultSystemAllowedMimes),
 	}
 }
 
@@ -69,6 +82,15 @@ func (s *Service) Upload(ctx context.Context, uploaderID string, r io.Reader, fi
 	uid, err := uuid.Parse(uploaderID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid uploader user id: %s", uploaderID)
+	}
+
+	// check MIME
+	if mimeType == nil || *mimeType == "" {
+		return nil, fmt.Errorf("mime_type is required")
+	}
+
+	if !s.mimePolicy.Allowed(*mimeType) {
+		return nil, fmt.Errorf("file type '%s' is not allowed by policy", *mimeType)
 	}
 
 	attID := uuid.New()

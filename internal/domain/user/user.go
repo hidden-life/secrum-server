@@ -19,6 +19,8 @@ type User struct {
 	UpdatedAt time.Time
 
 	IsActive bool
+
+	AllowedMimeTypes []string // user-level mime-types allowed
 }
 
 func New(hash string) *User {

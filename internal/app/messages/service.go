@@ -3,6 +3,7 @@ package messages
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -19,6 +20,9 @@ type Service struct {
 	deviceRepository ports.DeviceRepository
 	realtimeDelivery RealtimeDelivery
 	syncRepository   ports.SyncEventRepository
+
+	groupRepository       ports.GroupRepository
+	groupMemberRepository ports.GroupMemberRepository
 }
 
 type MediaMetadata struct {
@@ -105,14 +109,18 @@ func NewService(
 	deviceRepository ports.DeviceRepository,
 	realtime RealtimeDelivery,
 	syncRepository ports.SyncEventRepository,
+	groupRepository ports.GroupRepository,
+	groupMemberRepository ports.GroupMemberRepository,
 ) *Service {
 	return &Service{
-		log:              log,
-		msgRepository:    msgRepository,
-		userRepository:   userRepository,
-		deviceRepository: deviceRepository,
-		realtimeDelivery: realtime,
-		syncRepository:   syncRepository,
+		log:                   log,
+		msgRepository:         msgRepository,
+		userRepository:        userRepository,
+		deviceRepository:      deviceRepository,
+		realtimeDelivery:      realtime,
+		syncRepository:        syncRepository,
+		groupRepository:       groupRepository,
+		groupMemberRepository: groupMemberRepository,
 	}
 }
 
@@ -134,6 +142,25 @@ func (s *Service) Send(ctx context.Context, sUserID, sDeviceID string, req *Send
 	recipientUserID, err := uuid.Parse(req.RecipientUserID)
 	if err != nil {
 		return nil, fmt.Errorf("invalid recipient user id: %w", err)
+	}
+
+	if req.Media != nil && req.Media.MimeType != "" {
+		// system policy
+		// we will use same policy as in attachments
+		sysAllowed := func(mime string) bool {
+			switch strings.ToLower(mime) {
+			case "image/png", "image/jpeg", "image/webp", "image/gif", "video/mp4", "application/pdf":
+				return true
+			default:
+				return false
+			}
+		}
+
+		userAllowed, _ := s.userRepository.GetAllowedMimeTypes(ctx, senderUserID)
+		var groupAllowed []string
+		if !intersectAllowed(sysAllowed, groupAllowed, userAllowed, req.Media.MimeType) {
+			return nil, fmt.Errorf("media type '%q' is not allowed for this user", req.Media.MimeType)
+		}
 	}
 
 	// load all active devices of recipient
@@ -432,6 +459,26 @@ func (s *Service) SendGroupMessage(
 	if err != nil {
 		return nil, fmt.Errorf("invalid group id")
 	}
+
+	if req.Media != nil && req.Media.MimeType != "" {
+		// system policy
+		// we will use same policy as in attachments
+		sysAllowed := func(mime string) bool {
+			switch strings.ToLower(mime) {
+			case "image/png", "image/jpeg", "image/webp", "image/gif", "video/mp4", "application/pdf":
+				return true
+			default:
+				return false
+			}
+		}
+
+		groupAllowed, _ := s.groupRepository.GetAllowedMimeTypes(ctx, gID)
+		userAllowed, _ := s.userRepository.GetAllowedMimeTypes(ctx, sUID)
+		if !intersectAllowed(sysAllowed, groupAllowed, userAllowed, req.Media.MimeType) {
+			return nil, fmt.Errorf("media type '%q' is not allowed for this group/user", req.Media.MimeType)
+		}
+	}
+
 	var otpkUUID *uuid.UUID
 	if req.X3DHOTPKID != nil && *req.X3DHOTPKID != "" {
 		id, err := uuid.Parse(*req.X3DHOTPKID)

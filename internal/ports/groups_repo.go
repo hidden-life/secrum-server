@@ -12,6 +12,9 @@ type GroupRepository interface {
 	GetByID(context.Context, uuid.UUID) (*group.Group, error)
 	ListByUser(context.Context, uuid.UUID) ([]*group.Group, error)
 	Update(context.Context, *group.Group) error
+
+	UpdateAllowedMimeTypes(context.Context, uuid.UUID, []string) error
+	GetAllowedMimeTypes(context.Context, uuid.UUID) ([]string, error)
 }
 
 type GroupMemberRepository interface {

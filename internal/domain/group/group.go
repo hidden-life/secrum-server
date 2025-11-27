@@ -24,6 +24,8 @@ type Group struct {
 	CreatedAt time.Time
 	UpdatedAt time.Time
 	IsActive  bool
+
+	AllowedMimeTypes []string
 }
 
 func NewGroup(name string, createdBy uuid.UUID, avatar *string) *Group {
@@ -36,6 +38,8 @@ func NewGroup(name string, createdBy uuid.UUID, avatar *string) *Group {
 		CreatedAt: now,
 		UpdatedAt: now,
 		IsActive:  true,
+
+		AllowedMimeTypes: nil, // by default there are no restriction, instead of system
 	}
 }
 
