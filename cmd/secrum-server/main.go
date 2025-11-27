@@ -109,11 +109,10 @@ func main() {
 	syncRepo := postgres.NewSyncEventRepository(pool)
 	syncSvc := sync.NewService(log, chatSvc, syncRepo)
 
-	msgSvc := messages.NewService(log, msgRepo, userRepo, deviceRepo, rtHub, syncRepo)
-
 	groupRepo := postgres.NewGroupRepository(pool)
 	groupMemberRepo := postgres.NewGroupMemberRepository(pool)
 	groupSvc := groups.NewService(log, groupRepo, groupMemberRepo, userRepo, deviceRepo, msgRepo, rtHub)
+	msgSvc := messages.NewService(log, msgRepo, userRepo, deviceRepo, rtHub, syncRepo, groupRepo, groupMemberRepo)
 
 	attachmentsRepo := postgres.NewAttachmentRepository(pool)
 	localStorage, err := storage.NewLocalStorage(cfg.FileStorageDir) // @todo: Change to using from configuration
