@@ -38,7 +38,7 @@ func (s *SyncEventRepositoryPG) ListSince(ctx context.Context, userID uuid.UUID,
 		limit = 100
 	}
 
-	const q = `SELECT id, user_id, type, payload, created_at FROM sync_events WHERE user_id = $1 AND id > $2 ORDER BY id LIMIT $3`
+	const q = `SELECT id, user_id, type, payload, created_at FROM sync_events WHERE user_id = $1 AND id > $2 ORDER BY id ASC LIMIT $3`
 
 	rows, err := s.pool.Query(ctx, q, userID, after, limit)
 	if err != nil {

@@ -10,7 +10,7 @@ import (
 
 type SyncEvent struct {
 	ID        int64           `json:"id"`
-	UserID    string          `json:"user_id"`
+	UserID    uuid.UUID       `json:"user_id"`
 	Type      string          `json:"type"`
 	Payload   json.RawMessage `json:"payload"`
 	CreatedAt time.Time       `json:"created_at"`

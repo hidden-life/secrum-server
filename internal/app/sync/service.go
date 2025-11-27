@@ -97,7 +97,10 @@ func (s *Service) Delta(ctx context.Context, userID string, cursor int64, limit 
 			Payload:   event.Payload,
 			CreatedAt: event.CreatedAt.Format(time.RFC3339Nano),
 		})
-		newCursor += event.ID
+
+		if event.ID > newCursor {
+			newCursor = event.ID
+		}
 	}
 
 	return &DeltaSyncResponse{
