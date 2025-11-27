@@ -50,6 +50,8 @@ type Message struct {
 
 	IsEdited  bool
 	IsDeleted bool
+
+	AttachmentID *uuid.UUID
 }
 
 func New(senderUserID, senderDeviceID, recipientUserID, recipientDeviceID uuid.UUID, msg string) *Message {

@@ -117,7 +117,16 @@ func main() {
 
 	attachmentsRepo := postgres.NewAttachmentRepository(pool)
 	localStorage, err := storage.NewLocalStorage(cfg.FileStorageDir) // @todo: Change to using from configuration
-	attachmentSvc := attachments.NewService(log, attachmentsRepo, localStorage, "attachments", 1024*1024*50)
+	attachmentSvc := attachments.NewService(
+		log,
+		attachmentsRepo,
+		msgRepo,
+		groupRepo,
+		groupMemberRepo,
+		localStorage,
+		"attachments",
+		1024*1024*50,
+	)
 
 	presenceSvc := presence.New(rdb)
 

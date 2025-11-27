@@ -40,6 +40,8 @@ type SendRequest struct {
 
 	QuotedMessageID *string        `json:"quoted_message_id,omitempty"`
 	Media           *MediaMetadata `json:"media,omitempty"`
+
+	AttachmentID *string `json:"attachment_id,omitempty"`
 }
 
 // SendResponse contains created message ID.
@@ -54,6 +56,8 @@ type SendGroupMessageRequest struct {
 
 	QuotedMessageID *string        `json:"quoted_message_id,omitempty"`
 	Media           *MediaMetadata `json:"media,omitempty"`
+
+	AttachmentID *string `json:"attachment_id,omitempty"`
 }
 
 // PendingMessage is DTO for outgoing response.
@@ -174,6 +178,14 @@ func (s *Service) Send(ctx context.Context, sUserID, sDeviceID string, req *Send
 			msg.MediaWidth = req.Media.Width
 			msg.MediaHeight = req.Media.Height
 			msg.MediaBlurHash = req.Media.BlurHash
+		}
+
+		if req.AttachmentID != nil {
+			id, err := uuid.Parse(*req.AttachmentID)
+			if err != nil {
+				return nil, fmt.Errorf("invalid attachment id: %w", err)
+			}
+			msg.AttachmentID = &id
 		}
 
 		if err := s.msgRepository.Save(ctx, msg); err != nil {
@@ -461,6 +473,15 @@ func (s *Service) SendGroupMessage(
 				msg.MediaWidth = req.Media.Width
 				msg.MediaHeight = req.Media.Height
 				msg.MediaBlurHash = req.Media.BlurHash
+			}
+
+			// attachment
+			if req.AttachmentID != nil {
+				id, err := uuid.Parse(*req.AttachmentID)
+				if err != nil {
+					return nil, fmt.Errorf("invalid attachment id")
+				}
+				msg.AttachmentID = &id
 			}
 
 			out = append(out, msg)

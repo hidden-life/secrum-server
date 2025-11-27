@@ -36,4 +36,6 @@ type MessageRepository interface {
 	UnpinMessage(context.Context, uuid.UUID, uuid.UUID) error
 
 	SearchMessages(context.Context, uuid.UUID, string, int, *time.Time) ([]*message.Message, error)
+
+	FindMessageByAttachmentID(context.Context, uuid.UUID) (*message.Message, error)
 }

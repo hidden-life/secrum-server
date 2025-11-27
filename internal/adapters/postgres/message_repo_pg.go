@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"time"
 
@@ -438,7 +439,8 @@ func (m *MessageRepositoryPG) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]
 			media_duration_ms,
 			media_width,
 			media_height,
-			media_blurhash
+			media_blurhash,
+			attachment_id
 		FROM messages
 		WHERE id = ANY($1)`
 
@@ -480,6 +482,7 @@ func (m *MessageRepositoryPG) GetByIDs(ctx context.Context, ids []uuid.UUID) ([]
 			&msg.MediaWidth,
 			&msg.MediaHeight,
 			&msg.MediaBlurHash,
+			&msg.AttachmentID,
 		); err != nil {
 			return nil, err
 		}
@@ -749,4 +752,28 @@ func (m *MessageRepositoryPG) SearchMessages(ctx context.Context, userID uuid.UU
 	}
 
 	return res, rows.Err()
+}
+
+func (m *MessageRepositoryPG) FindMessageByAttachmentID(ctx context.Context, attachmentID uuid.UUID) (*message.Message, error) {
+	const q = `SELECT
+		id,
+		sender_user_id,
+		sender_device_id,
+		recipient_user_id,
+		recipient_device_id,
+		group_id 
+		FROM messages
+		WHERE attachment_id = $1`
+
+	row := m.pool.QueryRow(ctx, q, attachmentID)
+	var msg message.Message
+
+	if err := row.Scan(&msg.ID, &msg.SenderUserID, &msg.SenderDeviceID, &msg.RecipientUserID, &msg.RecipientDeviceID, &msg.GroupID); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	return &msg, nil
 }

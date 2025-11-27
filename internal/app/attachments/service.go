@@ -16,11 +16,14 @@ import (
 )
 
 type Service struct {
-	log                  *zap.Logger
-	attachmentRepository ports.AttachmentRepository
-	storage              ports.FileStorage
-	basePath             string
-	maxSize              int64
+	log                   *zap.Logger
+	attachmentRepository  ports.AttachmentRepository
+	storage               ports.FileStorage
+	messageRepository     ports.MessageRepository
+	groupRepository       ports.GroupRepository
+	groupMemberRepository ports.GroupMemberRepository
+	basePath              string
+	maxSize               int64
 }
 
 type UploadResultResponse struct {
@@ -36,17 +39,29 @@ type DownloadInfo struct {
 	Reader   io.ReadCloser
 }
 
-func NewService(log *zap.Logger, repo ports.AttachmentRepository, s ports.FileStorage, basePath string, maxSize int64) *Service {
+func NewService(
+	log *zap.Logger,
+	repo ports.AttachmentRepository,
+	msgRepo ports.MessageRepository,
+	groupRepo ports.GroupRepository,
+	groupMemberRepo ports.GroupMemberRepository,
+	s ports.FileStorage,
+	basePath string,
+	maxSize int64,
+) *Service {
 	if maxSize <= 0 {
 		maxSize = 1024 * 1024 * 50 // 50 MB as default size
 	}
 
 	return &Service{
-		log:                  log,
-		attachmentRepository: repo,
-		storage:              s,
-		basePath:             basePath,
-		maxSize:              maxSize,
+		log:                   log,
+		attachmentRepository:  repo,
+		storage:               s,
+		basePath:              basePath,
+		maxSize:               maxSize,
+		messageRepository:     msgRepo,
+		groupRepository:       groupRepo,
+		groupMemberRepository: groupMemberRepo,
 	}
 }
 
@@ -133,8 +148,32 @@ func (s *Service) Download(ctx context.Context, userID, attachmentID string) (*D
 		return nil, fmt.Errorf("attachment does not exist")
 	}
 
-	if a.UploadedBy != uid {
-		return nil, fmt.Errorf("access forbidden")
+	// load message which references attachment
+	msg, err := s.messageRepository.FindMessageByAttachmentID(ctx, a.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check attachment ACL: %w", err)
+	}
+
+	if msg == nil {
+		return nil, fmt.Errorf("attachment is not linked to any message")
+	}
+
+	// p2p
+	if msg.GroupID == nil {
+		if msg.SenderUserID != uid && msg.RecipientUserID != uid {
+			return nil, fmt.Errorf("access denied")
+		}
+	}
+
+	// group
+	if msg.GroupID != nil {
+		isOk, err := s.groupMemberRepository.IsMember(ctx, *msg.GroupID, uid)
+		if err != nil {
+			return nil, fmt.Errorf("failed to check group membership: %w", err)
+		}
+		if !isOk {
+			return nil, fmt.Errorf("access denied")
+		}
 	}
 
 	rc, err := s.storage.Open(ctx, a.BlobPath)
