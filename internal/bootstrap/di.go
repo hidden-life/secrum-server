@@ -26,6 +26,7 @@ import (
 	"github.com/hidden-life/secrum-server/internal/real_time"
 	"github.com/hidden-life/secrum-server/internal/server"
 	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
 )
 
 func InitApp(ctx context.Context, cfg *config.Config) (*App, error) {
@@ -35,6 +36,10 @@ func InitApp(ctx context.Context, cfg *config.Config) (*App, error) {
 	rdb := redis.NewClient(&redis.Options{
 		Addr: cfg.RedisAddress,
 	})
+
+	if err := rdb.Ping(ctx).Err(); err != nil {
+		log.Warn("Failed to connect to redis", zap.Error(err))
+	}
 
 	// postgres
 	pool, err := postgres.NewPool(ctx, cfg.DatabaseURL)
@@ -70,8 +75,11 @@ func InitApp(ctx context.Context, cfg *config.Config) (*App, error) {
 		cfg.JWTRefreshTTLMinutes,
 	)
 
+	// session store
+	sessionStore := internalRedis.NewSessionStore(rdb)
+
 	authSvc := auth.NewService(log, cfg.ApplicationEnv, otpStore, otpProvider, userRepo, deviceRepo, tokenManager)
-	deviceSvc := devices.NewService(log, deviceRepo)
+	deviceSvc := devices.NewService(log, deviceRepo, sessionStore)
 	contactSvc := contact.NewService(userRepo, contactRepo)
 	profileSvc := profile.NewService(log, userRepo)
 	chatSvc := chats.NewService(log, msgRepo, userRepo, chatStateRepo)
@@ -88,12 +96,12 @@ func InitApp(ctx context.Context, cfg *config.Config) (*App, error) {
 
 	// HTTP
 	srv := server.NewHTTPServer(log, cfg.HTTPPort)
-	authMW := http.AuthMiddleware(tokenManager)
+	authMW := http.AuthMiddleware(tokenManager, sessionStore, deviceRepo)
 
 	router := srv.Router()
 
 	http.RegisterAuthRoutes(router, authSvc)
-	http.RegisterKeyRoutes(router, keySvc, tokenManager)
+	http.RegisterKeyRoutes(router, keySvc, tokenManager, sessionStore, deviceRepo)
 
 	router.Group(func(r chi.Router) {
 		r.Use(authMW)

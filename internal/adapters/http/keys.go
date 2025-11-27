@@ -9,9 +9,15 @@ import (
 	"github.com/hidden-life/secrum-server/internal/ports"
 )
 
-func RegisterKeyRoutes(r chi.Router, svc *keys.Service, manager ports.TokenManager) {
+func RegisterKeyRoutes(
+	r chi.Router,
+	svc *keys.Service,
+	manager ports.TokenManager,
+	store ports.SessionStore,
+	deviceRepo ports.DeviceRepository,
+) {
 	r.Route("/keys", func(r chi.Router) {
-		r.Use(AuthMiddleware(manager))
+		r.Use(AuthMiddleware(manager, store, deviceRepo))
 		r.Post("/upload", uploadHandler(svc))
 		r.Post("/fetch", fetchHandler(svc))
 

@@ -13,6 +13,7 @@ import (
 type Service struct {
 	log              *zap.Logger
 	deviceRepository ports.DeviceRepository
+	sessionStore     ports.SessionStore
 }
 
 type DeviceDTO struct {
@@ -25,10 +26,11 @@ type DeviceDTO struct {
 	LastSeen  string `json:"last_seen"`
 }
 
-func NewService(log *zap.Logger, deviceRepository ports.DeviceRepository) *Service {
+func NewService(log *zap.Logger, deviceRepository ports.DeviceRepository, store ports.SessionStore) *Service {
 	return &Service{
 		log:              log,
 		deviceRepository: deviceRepository,
+		sessionStore:     store,
 	}
 }
 
@@ -87,6 +89,13 @@ func (s *Service) DeactivateDevice(ctx context.Context, userID, deviceID, curren
 		return fmt.Errorf("failed to deactivate device: %w", err)
 	}
 
+	// revoke all sessions
+	if s.sessionStore != nil {
+		if err := s.sessionStore.RevokeDevice(ctx, device.ID.String()); err != nil {
+			s.log.Warn("failed to revoke device session", zap.Error(err), zap.String("device_id", device.ID.String()))
+		}
+	}
+
 	s.log.Info("device deactivated", zap.String("user_id", device.UserID.String()), zap.String("device_id", device.ID.String()))
 
 	return nil
@@ -122,6 +131,12 @@ func (s *Service) DeleteDevice(ctx context.Context, userID, deviceID, currentDev
 
 	if err := s.deviceRepository.Delete(ctx, device.ID); err != nil {
 		return fmt.Errorf("failed to delete device: %w", err)
+	}
+
+	if s.sessionStore != nil {
+		if err := s.sessionStore.RevokeDevice(ctx, device.ID.String()); err != nil {
+			s.log.Warn("failed to revoke device session on delete", zap.Error(err), zap.String("device_id", device.ID.String()))
+		}
 	}
 
 	s.log.Info("device deleted", zap.String("user_id", device.UserID.String()), zap.String("device_id", device.ID.String()))

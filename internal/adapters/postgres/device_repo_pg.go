@@ -116,7 +116,7 @@ func (r *DeviceRepositoryPG) Deactivate(ctx context.Context, id uuid.UUID) error
 }
 
 func (r *DeviceRepositoryPG) Delete(ctx context.Context, id uuid.UUID) error {
-	const q = `DELETE FROM devices WHERE id = $1`
+	const q = `UPDATE devices SET is_active = FALSE WHERE id = $1`
 	_, err := r.pool.Exec(ctx, q, id)
 	return err
 }
