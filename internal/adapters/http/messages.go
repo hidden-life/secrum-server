@@ -192,7 +192,7 @@ func edit(svc *messages.Service) http.HandlerFunc {
 		}
 
 		messageID := chi.URLParam(r, "id")
-		if err := svc.EditMessage(r.Context(), messageID, req); err != nil {
+		if err := svc.EditMessage(r.Context(), userID, messageID, req); err != nil {
 			asError(w, http.StatusBadRequest, err.Error())
 			return
 		}

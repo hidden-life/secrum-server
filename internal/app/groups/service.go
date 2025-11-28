@@ -19,6 +19,7 @@ type Service struct {
 	deviceRepository      ports.DeviceRepository
 	messageRepository     ports.MessageRepository
 	hub                   *real_time.DeliveryHub
+	syncRepository        ports.SyncEventRepository
 }
 
 type GroupResponse struct {
@@ -52,6 +53,7 @@ func NewService(
 	deviceRepo ports.DeviceRepository,
 	messageRepo ports.MessageRepository,
 	hub *real_time.DeliveryHub,
+	syncRepository ports.SyncEventRepository,
 ) *Service {
 	return &Service{
 		log:                   log,
@@ -61,6 +63,7 @@ func NewService(
 		deviceRepository:      deviceRepo,
 		messageRepository:     messageRepo,
 		hub:                   hub,
+		syncRepository:        syncRepository,
 	}
 }
 
@@ -135,6 +138,15 @@ func (s *Service) CreateGroup(ctx context.Context, creator, name string, avatarU
 		}
 	}
 	s.hub.SetGroupMembers(g.ID, ids)
+
+	if s.syncRepository != nil {
+		if _, err := s.syncRepository.Append(ctx, creatorUUID, "group:created", map[string]string{
+			"group_id": g.ID.String(),
+			"name":     g.Name,
+		}); err != nil {
+			s.log.Warn("sync append failed", zap.Error(err))
+		}
+	}
 
 	return resp, nil
 }
@@ -265,6 +277,16 @@ func (s *Service) AddMember(ctx context.Context, actorUserID, groupID, targetUse
 	}
 	s.hub.SetGroupMembers(groupUUID, ids)
 
+	if s.syncRepository != nil {
+		if _, err := s.syncRepository.Append(ctx, targetUUID, "group:member:add", map[string]string{
+			"group_id": groupUUID.String(),
+			"by":       actorUUID.String(),
+			"role":     string(group.RoleMember),
+		}); err != nil {
+			s.log.Warn("sync append failed", zap.Error(err))
+		}
+	}
+
 	return nil
 }
 
@@ -315,6 +337,20 @@ func (s *Service) RemoveMember(ctx context.Context, actorUserID, groupID, target
 		}
 	}
 	s.hub.SetGroupMembers(groupUUID, ids)
+
+	eventType := "group:member:remove"
+	if actorUUID == targetUUID {
+		eventType = "group:member:leave"
+	}
+
+	if s.syncRepository != nil {
+		if _, err := s.syncRepository.Append(ctx, targetUUID, eventType, map[string]string{
+			"group_id": groupUUID.String(),
+			"by":       actorUUID.String(),
+		}); err != nil {
+			s.log.Warn("sync append failed", zap.Error(err))
+		}
+	}
 
 	return nil
 }

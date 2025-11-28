@@ -239,6 +239,12 @@ func (s *Service) Send(ctx context.Context, sUserID, sDeviceID string, req *Send
 		if err == nil {
 			_ = s.realtimeDelivery.PushToDevice(ctx, msg.RecipientDeviceID, buff)
 		}
+
+		if s.syncRepository != nil {
+			if _, err = s.syncRepository.Append(ctx, msg.RecipientUserID, "message:new", e); err != nil {
+				s.log.Warn("sync append failed", zap.Error(err))
+			}
+		}
 	}
 
 	s.log.Info(
@@ -389,17 +395,17 @@ func (s *Service) AckDelivered(ctx context.Context, deviceID string, req AckRequ
 					Data: e,
 				}
 
-				raw, err := real_time.MarshalEvent("ack_delivered", env)
+				raw, err := real_time.MarshalEvent("message:delivered", env)
 				if err == nil {
 					_ = s.realtimeDelivery.PushToDevice(ctx, msg.SenderDeviceID, raw)
 				} else {
-					s.log.Warn("failed to marshal ack_delivered event", zap.Error(err))
+					s.log.Warn("failed to marshal message:delivered event", zap.Error(err))
 				}
 
 				// sync
 				if s.syncRepository != nil {
-					if _, err := s.syncRepository.Append(ctx, msg.SenderUserID, "ack_delivered", e); err != nil {
-						s.log.Warn("failed to append ack_delivered event", zap.Error(err))
+					if _, err := s.syncRepository.Append(ctx, msg.SenderUserID, "message:delivered", e); err != nil {
+						s.log.Warn("sync append failed", zap.Error(err))
 					}
 				}
 			}
@@ -417,17 +423,17 @@ func (s *Service) AckDelivered(ctx context.Context, deviceID string, req AckRequ
 					Data: e,
 				}
 
-				raw, err := real_time.MarshalEvent("ack_read", env)
+				raw, err := real_time.MarshalEvent("message:read", env)
 				if err == nil {
 					_ = s.realtimeDelivery.PushToDevice(ctx, msg.SenderDeviceID, raw)
 				} else {
-					s.log.Warn("failed to marshal ack_read event", zap.Error(err))
+					s.log.Warn("failed to marshal message:read event", zap.Error(err))
 				}
 
 				// sync
 				if s.syncRepository != nil {
-					if _, err := s.syncRepository.Append(ctx, msg.SenderUserID, "ack_read", e); err != nil {
-						s.log.Warn("failed to append ack_read event", zap.Error(err))
+					if _, err := s.syncRepository.Append(ctx, msg.SenderUserID, "message:read", e); err != nil {
+						s.log.Warn("sync append failed", zap.Error(err))
 					}
 				}
 			}
@@ -556,6 +562,11 @@ func (s *Service) SendGroupMessage(
 		if err == nil {
 			_ = s.realtimeDelivery.PushToDevice(ctx, msg.RecipientDeviceID, buff)
 		}
+		if s.syncRepository != nil {
+			if _, err = s.syncRepository.Append(ctx, msg.RecipientUserID, "group:message:new", e); err != nil {
+				s.log.Warn("sync append failed", zap.Error(err))
+			}
+		}
 	}
 
 	var first string
@@ -642,7 +653,7 @@ func (s *Service) DeleteForMe(ctx context.Context, userID, msgID string) error {
 }
 
 func (s *Service) DeleteForAll(ctx context.Context, actorID, msgID string) error {
-	_, err := uuid.Parse(actorID)
+	actorUID, err := uuid.Parse(actorID)
 	if err != nil {
 		return fmt.Errorf("invalid user id")
 	}
@@ -654,13 +665,29 @@ func (s *Service) DeleteForAll(ctx context.Context, actorID, msgID string) error
 
 	// here we can add permissions later
 
-	return s.msgRepository.DeleteForAll(ctx, mID)
+	err = s.msgRepository.DeleteForAll(ctx, mID)
+	if err != nil {
+		return err
+	}
+
+	if s.syncRepository != nil {
+		_, _ = s.syncRepository.Append(ctx, actorUID, "message:deleted", map[string]string{
+			"message_id": msgID,
+		})
+	}
+
+	return nil
 }
 
-func (s *Service) EditMessage(ctx context.Context, msgID string, req EditMessageRequest) error {
+func (s *Service) EditMessage(ctx context.Context, userID, msgID string, req EditMessageRequest) error {
 	mID, err := uuid.Parse(msgID)
 	if err != nil {
 		return fmt.Errorf("invalid message id")
+	}
+
+	uID, err := uuid.Parse(userID)
+	if err != nil {
+		return fmt.Errorf("invalid user id")
 	}
 
 	var otpk *uuid.UUID
@@ -669,7 +696,18 @@ func (s *Service) EditMessage(ctx context.Context, msgID string, req EditMessage
 		otpk = &id
 	}
 
-	return s.msgRepository.Edit(ctx, mID, req.CipherText, req.PubKey, otpk)
+	err = s.msgRepository.Edit(ctx, mID, req.CipherText, req.PubKey, otpk)
+	if err != nil {
+		return err
+	}
+
+	if s.syncRepository != nil {
+		_, _ = s.syncRepository.Append(ctx, uID, "message:edited", map[string]string{
+			"message_id": mID.String(),
+		})
+	}
+
+	return nil
 }
 
 func (s *Service) AddReaction(ctx context.Context, userID, msgID, emoji string) error {
@@ -681,6 +719,13 @@ func (s *Service) AddReaction(ctx context.Context, userID, msgID, emoji string) 
 	mID, err := uuid.Parse(msgID)
 	if err != nil {
 		return fmt.Errorf("invalid message id")
+	}
+
+	if s.syncRepository != nil {
+		_, _ = s.syncRepository.Append(ctx, uID, "message:reaction:add", map[string]string{
+			"message_id": msgID,
+			"emoji":      emoji,
+		})
 	}
 
 	return s.msgRepository.AddReaction(ctx, mID, uID, emoji)
@@ -695,6 +740,12 @@ func (s *Service) RemoveReaction(ctx context.Context, userID, msgID string) erro
 	mID, err := uuid.Parse(msgID)
 	if err != nil {
 		return fmt.Errorf("invalid message id")
+	}
+
+	if s.syncRepository != nil {
+		_, _ = s.syncRepository.Append(ctx, uID, "message:reaction:remove", map[string]string{
+			"message_id": msgID,
+		})
 	}
 
 	return s.msgRepository.RemoveReaction(ctx, mID, uID)
@@ -759,6 +810,13 @@ func (s *Service) ForwardToUser(ctx context.Context, actorUserID, actorDeviceID,
 		}
 
 		// here we can push it over realtimeDelivery hub, as in Send(...)
+
+		if s.syncRepository != nil {
+			_, _ = s.syncRepository.Append(ctx, actorUID, "message:forwarded", map[string]string{
+				"new_message_id":    msg.ID.String(),
+				"source_message_id": src.ID.String(),
+			})
+		}
 	}
 
 	return &SendResponse{MessageID: first}, nil
@@ -774,6 +832,12 @@ func (s *Service) PinMessage(ctx context.Context, userID, messageID string) erro
 		return fmt.Errorf("invalid message id")
 	}
 
+	if s.syncRepository != nil {
+		_, _ = s.syncRepository.Append(ctx, uid, "chat:pin", map[string]string{
+			"message_id": messageID,
+		})
+	}
+
 	return s.msgRepository.PinMessage(ctx, mid, uid)
 }
 
@@ -785,6 +849,12 @@ func (s *Service) UnpinMessage(ctx context.Context, userID, messageID string) er
 	mid, err := uuid.Parse(messageID)
 	if err != nil {
 		return fmt.Errorf("invalid message id")
+	}
+
+	if s.syncRepository != nil {
+		_, _ = s.syncRepository.Append(ctx, uid, "chat:unpin", map[string]string{
+			"message_id": messageID,
+		})
 	}
 
 	return s.msgRepository.UnpinMessage(ctx, mid, uid)

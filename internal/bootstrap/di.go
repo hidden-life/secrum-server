@@ -87,7 +87,7 @@ func InitApp(ctx context.Context, cfg *config.Config) (*App, error) {
 
 	realtimeHub := real_time.NewDeliveryHub(log)
 
-	groupSvc := groups.NewService(log, groupRepo, groupMemberRepo, userRepo, deviceRepo, msgRepo, realtimeHub)
+	groupSvc := groups.NewService(log, groupRepo, groupMemberRepo, userRepo, deviceRepo, msgRepo, realtimeHub, syncRepo)
 	msgSvc := messages.NewService(log, msgRepo, userRepo, deviceRepo, realtimeHub, syncRepo, groupRepo, groupMemberRepo)
 
 	st, _ := storage.NewLocalStorage(cfg.FileStorageDir)
