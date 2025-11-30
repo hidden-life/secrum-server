@@ -5,6 +5,8 @@ import (
 	"crypto/rand"
 	"fmt"
 	"regexp"
+	"runtime"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -70,8 +72,12 @@ type BeginRegistrationResponse struct {
 
 // VerifyRegistrationRequest represents the request to verify the OTP code during user registration.
 type VerifyRegistrationRequest struct {
-	RequestID string `json:"request_id"`
-	Code      string `json:"code"`
+	RequestID  string `json:"request_id"`
+	Code       string `json:"code"`
+	Phone      string `json:"phone"`
+	DeviceID   string `json:"device_id,omitempty"`
+	DeviceName string `json:"device_name,omitempty"`
+	Platform   string `json:"platform,omitempty"`
 }
 
 // VerifyRegistrationResponse represents the response after verifying the OTP code during user registration.
@@ -115,8 +121,8 @@ func (s *Service) BeginRegistration(ctx context.Context, req BeginRegistrationRe
 }
 
 func (s *Service) VerifyRegistration(ctx context.Context, req VerifyRegistrationRequest) (*VerifyRegistrationResponse, error) {
-	if req.RequestID == "" || req.Code == "" {
-		return nil, fmt.Errorf("request_id and code are required")
+	if req.RequestID == "" || req.Code == "" || req.Phone == "" {
+		return nil, fmt.Errorf("request_id, code and phone are required fields")
 	}
 
 	phoneHash, isValid, err := s.otpStore.VerifyAndConsume(ctx, req.RequestID, req.Code)
@@ -141,10 +147,52 @@ func (s *Service) VerifyRegistration(ctx context.Context, req VerifyRegistration
 		s.log.Info("created new user", zap.String("user_id", u.ID.String()))
 	}
 
-	// Register device (for now single default device)
-	dev := device.New(u.ID, "default", "unknown")
-	if err := s.deviceRepo.Create(ctx, dev); err != nil {
-		return nil, fmt.Errorf("failed to create device: %w", err)
+	deviceName := req.DeviceName
+	if deviceName == "" {
+		deviceName = "default"
+	}
+
+	platform := strings.ToLower(req.Platform)
+	if platform == "" {
+		platform = runtime.GOOS
+	}
+
+	var dev *device.Device
+	if req.DeviceID != "" {
+		devUUID, err := uuid.Parse(req.DeviceID)
+		if err != nil {
+			return nil, fmt.Errorf("invalid device_id: %w", err)
+		}
+
+		existing, err := s.deviceRepo.GetById(ctx, devUUID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get device: %w", err)
+		}
+
+		if existing == nil {
+			dev = device.New(u.ID, deviceName, platform)
+			dev.ID = devUUID
+
+			if err := s.deviceRepo.Create(ctx, dev); err != nil {
+				return nil, fmt.Errorf("failed to create device: %w", err)
+			}
+		} else {
+			if existing.UserID != u.ID {
+				return nil, fmt.Errorf("device belongs to another user")
+			}
+
+			existing.LastSeen = time.Now().UTC()
+			existing.Name = deviceName
+			existing.Platform = platform
+
+			_ = s.deviceRepo.UpdateLastSeen(ctx, existing.ID, existing.LastSeen)
+			dev = existing
+		}
+	} else {
+		dev = device.New(u.ID, deviceName, platform)
+		if err := s.deviceRepo.Create(ctx, dev); err != nil {
+			return nil, fmt.Errorf("failed to create device: %w", err)
+		}
 	}
 
 	// Issue tokens
