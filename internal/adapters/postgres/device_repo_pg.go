@@ -31,7 +31,7 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
 }
 
 func (r *DeviceRepositoryPG) GetById(ctx context.Context, deviceID uuid.UUID) (*device.Device, error) {
-	const q = `SELECT id, user_id, name, platform, created_at, updated_at, is_active, refresh_token_hash, refresh_token_expires_at FROM devices WHERE id = $1`
+	const q = `SELECT id, user_id, name, platform, created_at, last_seen, refresh_token_hash, refresh_token_expires_at, is_active FROM devices WHERE id = $1`
 	row := r.pool.QueryRow(ctx, q, deviceID)
 	var d device.Device
 

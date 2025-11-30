@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -21,6 +22,8 @@ const (
 func AuthMiddleware(t ports.TokenManager, store ports.SessionStore, deviceRepo ports.DeviceRepository) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			fmt.Println("AUTH MIDDLEWARE: ", r.Method, r.URL.Path)
+			fmt.Println("AUTH HEADER = ", r.Header.Get("Authorization"))
 			authHeader := r.Header.Get("Authorization")
 			if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
 				asError(w, http.StatusUnauthorized, "missing or invalid bearer token")

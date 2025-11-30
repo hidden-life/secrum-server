@@ -66,25 +66,30 @@ func (m *Manager) Generate(_ context.Context, userID, deviceID string) (*ports.T
 
 // ValidateAccess parses and validates access token, returns userID and deviceID
 func (m *Manager) ValidateAccess(_ context.Context, accessToken string) (userID string, deviceID string, err error) {
-	token, err := jwtLib.Parse(accessToken, func(token *jwtLib.Token) (interface{}, error) {
+	token, err := jwtLib.ParseWithClaims(accessToken, &jwtLib.MapClaims{}, func(token *jwtLib.Token) (interface{}, error) {
 		if token.Method != jwtLib.SigningMethodHS256 {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 
 		return m.accessSecret, nil
-	})
+	}, jwtLib.WithIssuer(m.issuer), jwtLib.WithValidMethods([]string{"HS256"}), jwtLib.WithExpirationRequired())
 
-	if err != nil || !token.Valid {
-		return "", "", errors.New("invalid access token")
+	if err != nil {
+		return "", "", fmt.Errorf("access token is invalid: %v", err)
 	}
 
-	claims, isOk := token.Claims.(jwtLib.MapClaims)
+	claims, isOk := token.Claims.(*jwtLib.MapClaims)
 	if !isOk {
-		return "", "", errors.New("invalid claims")
+		return "", "", errors.New("invalid claims type")
 	}
 
-	userID, _ = claims["sub"].(string)
-	deviceID, _ = claims["device"].(string)
+	typ, _ := (*claims)["typ"].(string)
+	if typ != "access_token" {
+		return "", "", errors.New("invalid token type")
+	}
+
+	userID, _ = (*claims)["sub"].(string)
+	deviceID, _ = (*claims)["device"].(string)
 	if userID == "" || deviceID == "" {
 		return "", "", errors.New("missing required claims")
 	}

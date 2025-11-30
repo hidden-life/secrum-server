@@ -71,7 +71,7 @@ func InitApp(ctx context.Context, cfg *config.Config) (*App, error) {
 		cfg.JWTAccessSecret,
 		cfg.JWTRefreshSecret,
 		cfg.ApplicationName,
-		cfg.JWTRefreshTTLMinutes,
+		cfg.JWTAccessTTLMinutes,
 		cfg.JWTRefreshTTLMinutes,
 	)
 

@@ -69,7 +69,11 @@ func listDevicesHandler(svc *devices.Service) http.HandlerFunc {
 			return
 		}
 
-		currentDeviceID, _ := r.Context().Value("device_id").(string)
+		currentDeviceID := DeviceIDFromContext(r.Context())
+		if currentDeviceID == "" {
+			asError(w, http.StatusBadRequest, "missing device id in context")
+		}
+
 		list, err := svc.ListUserDevices(r.Context(), userID, currentDeviceID)
 		if err != nil {
 			asError(w, http.StatusBadRequest, err.Error())

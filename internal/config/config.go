@@ -54,6 +54,9 @@ func LoadConfig() *Config {
 	_ = v.BindEnv("jwt.refresh_secret", "JWT_REFRESH_SECRET")
 	_ = v.BindEnv("redis.addr", "REDIS_ADDR")
 	_ = v.BindEnv("http.port", "HTTP_PORT")
+	_ = v.BindEnv("app.name", "APP_NAME")
+	_ = v.BindEnv("jwt.refresh_token_ttl", "REFRESH_TOKEN_TTL")
+	_ = v.BindEnv("jwt.access_token_ttl", "ACCESS_TOKEN_TTL")
 
 	if err := v.ReadInConfig(); err != nil {
 		panic(fmt.Errorf("fatal error config: %w", err))
@@ -67,8 +70,8 @@ func LoadConfig() *Config {
 		RedisAddress:         v.GetString("redis.addr"),
 		JWTAccessSecret:      v.GetString("jwt.access_secret"),
 		JWTRefreshSecret:     v.GetString("jwt.refresh_secret"),
-		JWTAccessTTLMinutes:  v.GetInt("jwt.access_ttl_minutes"),
-		JWTRefreshTTLMinutes: v.GetInt("jwt.refresh_ttl_minutes"),
+		JWTAccessTTLMinutes:  v.GetInt("jwt.access_token_ttl"),
+		JWTRefreshTTLMinutes: v.GetInt("jwt.refresh_token_ttl"),
 		FileStorageDir:       v.GetString("storage.local_dir"),
 		MaxUploadMB:          v.GetInt("security.max_upload_mb"),
 	}
