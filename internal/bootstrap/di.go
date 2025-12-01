@@ -100,6 +100,7 @@ func InitApp(ctx context.Context, cfg *config.Config) (*App, error) {
 
 	router := srv.Router()
 
+	http.RegisterHealthRoutes(router)
 	http.RegisterAuthRoutes(router, authSvc)
 	http.RegisterKeyRoutes(router, keySvc, tokenManager, sessionStore, deviceRepo)
 
