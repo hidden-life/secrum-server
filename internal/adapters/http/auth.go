@@ -12,7 +12,26 @@ func RegisterAuthRoutes(r chi.Router, svc *auth.Service) {
 	r.Route("/auth", func(r chi.Router) {
 		r.Post("/begin", beginHandler(svc))
 		r.Post("/verify", verifyHandler(svc))
+		r.Post("/refresh", refreshHandler(svc))
 	})
+}
+
+func refreshHandler(svc *auth.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req auth.RefreshRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			asError(w, http.StatusBadRequest, "invalid request body")
+			return
+		}
+
+		resp, err := svc.Refresh(r.Context(), req)
+		if err != nil {
+			asError(w, http.StatusUnauthorized, err.Error())
+			return
+		}
+
+		asJson(w, http.StatusOK, resp)
+	}
 }
 
 func beginHandler(svc *auth.Service) http.HandlerFunc {
