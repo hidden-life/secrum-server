@@ -30,7 +30,24 @@ func AuthMiddleware(t ports.TokenManager, store ports.SessionStore, deviceRepo p
 				return
 			}
 
-			token := strings.TrimPrefix(authHeader, "Bearer ")
+			token := ""
+
+			// search in header
+			header := r.Header.Get("Authorization")
+			if strings.HasPrefix(header, "Bearer ") {
+				token = strings.TrimPrefix(header, "Bearer ")
+			}
+
+			// search in query (for WS)
+			if token == "" {
+				token = r.URL.Query().Get("access_token")
+			}
+
+			if token == "" {
+				asError(w, http.StatusUnauthorized, "unauthorized")
+				return
+			}
+
 			userID, deviceID, err := t.ValidateAccess(r.Context(), token)
 			if err != nil {
 				asError(w, http.StatusUnauthorized, "invalid or expired token")
