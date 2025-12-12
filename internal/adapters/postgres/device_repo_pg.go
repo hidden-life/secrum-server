@@ -22,20 +22,48 @@ func NewDeviceRepository(p *pgxpool.Pool) *DeviceRepositoryPG {
 // Create inserts a new device record into the database.
 func (r *DeviceRepositoryPG) Create(ctx context.Context, d *device.Device) error {
 	const q = `
-INSERT INTO devices (id, user_id, name, platform, created_at, last_seen, refresh_token_hash, refresh_token_expires_at, is_active) 
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`
+INSERT INTO devices (id, user_id, name, platform, created_at, last_seen, refresh_token_hash, refresh_token_expires_at, is_active, identity_key, signed_prekey, signed_prekey_signature) 
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`
 
-	_, err := r.pool.Exec(ctx, q, d.ID, d.UserID, d.Name, d.Platform, d.CreatedAt, d.LastSeen, d.RefreshTokenHash, d.RefreshTokenExpiresAt, d.IsActive)
+	_, err := r.pool.Exec(
+		ctx,
+		q,
+		d.ID,
+		d.UserID,
+		d.Name,
+		d.Platform,
+		d.CreatedAt,
+		d.LastSeen,
+		d.RefreshTokenHash,
+		d.RefreshTokenExpiresAt,
+		d.IsActive,
+		d.IdentityKey,
+		d.SignedPreKey,
+		d.SignedPreKeySignature,
+	)
 
 	return err
 }
 
 func (r *DeviceRepositoryPG) GetById(ctx context.Context, deviceID uuid.UUID) (*device.Device, error) {
-	const q = `SELECT id, user_id, name, platform, created_at, last_seen, refresh_token_hash, refresh_token_expires_at, is_active FROM devices WHERE id = $1`
+	const q = `SELECT 
+		id, 
+		user_id, 
+		name, 
+		platform, 
+		created_at, 
+		last_seen, 
+		refresh_token_hash, 
+		refresh_token_expires_at, 
+		is_active,
+		identity_key,
+		signed_prekey,
+		signed_prekey_signature
+	FROM devices WHERE id = $1`
 	row := r.pool.QueryRow(ctx, q, deviceID)
 	var d device.Device
 
-	if err := row.Scan(&d.ID, &d.UserID, &d.Name, &d.Platform, &d.CreatedAt, &d.LastSeen, &d.RefreshTokenHash, &d.RefreshTokenExpiresAt, &d.IsActive); err != nil {
+	if err := row.Scan(&d.ID, &d.UserID, &d.Name, &d.Platform, &d.CreatedAt, &d.LastSeen, &d.RefreshTokenHash, &d.RefreshTokenExpiresAt, &d.IsActive, &d.IdentityKey, &d.SignedPreKey, &d.SignedPreKeySignature); err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
 		}
@@ -77,7 +105,10 @@ func (r *DeviceRepositoryPG) ListActiveByUser(ctx context.Context, userID uuid.U
 		last_seen,
 		is_active,
 		refresh_token_hash,
-		refresh_token_expires_at
+		refresh_token_expires_at,
+		identity_key,
+		signed_prekey,
+		signed_prekey_signature
 	FROM devices
 	WHERE user_id = $1 AND is_active = TRUE`
 
@@ -100,6 +131,9 @@ func (r *DeviceRepositoryPG) ListActiveByUser(ctx context.Context, userID uuid.U
 			&d.IsActive,
 			&d.RefreshTokenHash,
 			&d.RefreshTokenExpiresAt,
+			&d.IdentityKey,
+			&d.SignedPreKey,
+			&d.SignedPreKeySignature,
 		); err != nil {
 			return nil, err
 		}
@@ -118,5 +152,12 @@ func (r *DeviceRepositoryPG) Deactivate(ctx context.Context, id uuid.UUID) error
 func (r *DeviceRepositoryPG) Delete(ctx context.Context, id uuid.UUID) error {
 	const q = `UPDATE devices SET is_active = FALSE WHERE id = $1`
 	_, err := r.pool.Exec(ctx, q, id)
+	return err
+}
+
+func (r *DeviceRepositoryPG) UpdateKeys(ctx context.Context, id uuid.UUID, identityKey, signedPreKey, signedPreKeySignature string) error {
+	const q = `UPDATE devices SET identity_key = $2, signed_prekey = $3, signed_prekey_signature = $4 WHERE id = $1`
+	_, err := r.pool.Exec(ctx, q, id, identityKey, signedPreKey, signedPreKeySignature)
+
 	return err
 }

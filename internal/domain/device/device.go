@@ -18,6 +18,10 @@ type Device struct {
 	RefreshTokenExpiresAt *time.Time
 
 	IsActive bool
+
+	IdentityKey           string
+	SignedPreKey          string
+	SignedPreKeySignature string
 }
 
 func New(userID uuid.UUID, name, platform string) *Device {

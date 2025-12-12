@@ -40,10 +40,10 @@ func (r *OTPKRepository) GetOneUnusedAndMarkUsed(ctx context.Context, id uuid.UU
 
 	// find any unused key
 	const q = `SELECT id, public_key, created_at, used_at 
-FROM one_time_prekeys 
-WHERE device_id = $1 AND used_at IS NULL
-ORDER BY created_at ASC
-FOR UPDATE SKIP LOCKED LIMIT 1`
+		FROM one_time_prekeys 
+		WHERE device_id = $1 AND used_at IS NULL
+		ORDER BY created_at ASC
+		FOR UPDATE SKIP LOCKED LIMIT 1`
 
 	row := tx.QueryRow(ctx, q, id)
 	var k key.OneTimePreKey
@@ -56,7 +56,11 @@ FOR UPDATE SKIP LOCKED LIMIT 1`
 	}
 	// mark as used
 	const updQ = `UPDATE one_time_prekeys SET used_at = NOW() WHERE id = $1`
-	if _, err := tx.Exec(ctx, q, k.ID); err != nil {
+	if _, err := tx.Exec(ctx, updQ, k.ID); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
 

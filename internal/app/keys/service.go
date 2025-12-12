@@ -6,144 +6,117 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/hidden-life/secrum-server/internal/domain/key"
-	keybundle "github.com/hidden-life/secrum-server/internal/domain/key_bundle"
 	"github.com/hidden-life/secrum-server/internal/ports"
 	"go.uber.org/zap"
 )
 
 type Service struct {
-	log            *zap.Logger
-	repository     ports.KeyRepository
-	otpkRepository ports.OneTimePreKeyRepository
+	log         *zap.Logger
+	devicesRepo ports.DeviceRepository
+	otpkRepo    ports.OneTimePreKeyRepository
 }
 
 type UploadRequest struct {
-	DeviceID        string   `json:"device_id"`
-	IdentityKey     string   `json:"identity_key"`
-	SignedPreKey    string   `json:"signed_prekey"`
-	OneTimePreKeys  []string `json:"one_time_prekeys"`
-	SignedPreKeySig string   `json:"signed_prekey_sig,omitempty"`
+	IdentityKey           string   `json:"identity_key"`
+	SignedPreKey          string   `json:"signed_prekey"`
+	SignedPreKeySignature string   `json:"signed_prekey_sig"`
+	OneTimePreKeys        []string `json:"one_time_prekeys"`
 }
 
-type UploadResponse struct {
-	Message string `json:"message"`
-}
-
-type PreKeyBundleRequest struct {
-	UserID   string `json:"user_id"`
-	DeviceID string `json:"device_id,omitempty"`
-}
-
-type PreKeyBundleResponse struct {
-	UserID          string `json:"user_id"`
-	DeviceID        string `json:"device_id"`
-	IdentityKey     string `json:"identity_key"`
-	SignedPreKey    string `json:"signed_prekey"`
-	SignedPreKeySig string `json:"signed_prekey_sig,omitempty"`
-	OneTimePreKey   *struct {
+type DeviceBundle struct {
+	DeviceID              string `json:"device_id"`
+	IdentityKey           string `json:"identity_key"`
+	SignedPreKey          string `json:"signed_prekey"`
+	SignedPreKeySignature string `json:"signed_prekey_sig"`
+	OneTimePreKey         *struct {
 		ID        string `json:"id"`
 		PublicKey string `json:"public_key"`
 	} `json:"one_time_prekey,omitempty"`
 }
 
-type FetchRequest struct {
-	DeviceID string `json:"device_id"`
+type BundleResponse struct {
+	UserID  string         `json:"user_id"`
+	Devices []DeviceBundle `json:"devices"`
 }
 
-func NewService(log *zap.Logger, repo ports.KeyRepository, otpk ports.OneTimePreKeyRepository) *Service {
+func NewService(log *zap.Logger, devicesRepo ports.DeviceRepository, otpkRepo ports.OneTimePreKeyRepository) *Service {
 	return &Service{
-		log:            log,
-		repository:     repo,
-		otpkRepository: otpk,
+		log:         log,
+		devicesRepo: devicesRepo,
+		otpkRepo:    otpkRepo,
 	}
 }
 
-func (s *Service) Upload(ctx context.Context, req UploadRequest) (*UploadResponse, error) {
-	deviceID, err := uuid.Parse(req.DeviceID)
+func (s *Service) UploadDeviceKeys(ctx context.Context, devID uuid.UUID, req UploadRequest) error {
+	dev, err := s.devicesRepo.GetById(ctx, devID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid device ID: %w", err)
+		return err
 	}
 
-	kb := keybundle.New(deviceID, req.IdentityKey, req.SignedPreKey, req.SignedPreKeySig, req.OneTimePreKeys)
-	if err := s.repository.Save(ctx, kb); err != nil {
-		return nil, fmt.Errorf("failed to save key bundle: %w", err)
+	if dev == nil {
+		return fmt.Errorf("device not found")
 	}
 
-	// add upload one-time per key
+	dev.IdentityKey = req.IdentityKey
+	dev.SignedPreKey = req.SignedPreKey
+	dev.SignedPreKeySignature = req.SignedPreKeySignature
+
+	if err := s.devicesRepo.UpdateKeys(ctx, devID, dev.IdentityKey, dev.SignedPreKey, dev.SignedPreKeySignature); err != nil {
+		return fmt.Errorf("failed to update keys: %w", err)
+	}
+
 	if len(req.OneTimePreKeys) > 0 {
-		var list []*key.OneTimePreKey
+		list := make([]*key.OneTimePreKey, 0, len(req.OneTimePreKeys))
 		for _, pub := range req.OneTimePreKeys {
-			list = append(list, key.New(deviceID, pub))
+			list = append(list, key.New(dev.ID, pub))
 		}
 
-		if err := s.otpkRepository.BulkInsert(ctx, list); err != nil {
-			s.log.Warn("failed to bulk insert one-time per keys", zap.Error(err))
+		if err := s.otpkRepo.BulkInsert(ctx, list); err != nil {
+			s.log.Warn("failed inserting OTPKs", zap.Error(err))
 		}
 	}
 
-	s.log.Info("Device key bundle uploaded", zap.String("device_id", req.DeviceID))
-
-	return &UploadResponse{Message: "Key bundle uploaded successfully"}, nil
+	s.log.Info("device keys uploaded", zap.String("device_id", dev.ID.String()))
+	return nil
 }
 
-func (s *Service) Fetch(ctx context.Context, req FetchRequest) (*keybundle.KeyBundle, error) {
-	deviceID, err := uuid.Parse(req.DeviceID)
+func (s *Service) GetUserBundle(ctx context.Context, userID uuid.UUID) (*BundleResponse, error) {
+	devices, err := s.devicesRepo.ListActiveByUser(ctx, userID)
 	if err != nil {
-		return nil, fmt.Errorf("invalid device ID: %w", err)
+		return nil, err
 	}
 
-	kb, err := s.repository.GetByDeviceID(ctx, deviceID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch key bundle: %w", err)
+	var result = &BundleResponse{
+		UserID:  userID.String(),
+		Devices: make([]DeviceBundle, 0, len(devices)),
 	}
 
-	if kb == nil {
-		return nil, fmt.Errorf("no keys found for device")
-	}
-
-	return kb, nil
-}
-
-func (s *Service) PreKeyBundle(ctx context.Context, req *PreKeyBundleRequest) (*PreKeyBundleResponse, error) {
-	if req.DeviceID == "" {
-		return nil, fmt.Errorf("device ID is required")
-	}
-
-	devID, err := uuid.Parse(req.DeviceID)
-	if err != nil {
-		return nil, fmt.Errorf("invalid device ID: %w", err)
-	}
-
-	kb, err := s.repository.GetByDeviceID(ctx, devID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch key bundle: %w", err)
-	}
-	if kb == nil {
-		return nil, fmt.Errorf("no keys found for device")
-	}
-
-	// take one free one-time prekey
-	otpk, err := s.otpkRepository.GetOneUnusedAndMarkUsed(ctx, devID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to fetch one-time pre key bundle: %w", err)
-	}
-
-	resp := &PreKeyBundleResponse{
-		UserID:          req.UserID,
-		DeviceID:        req.DeviceID,
-		IdentityKey:     kb.IdentityKey,
-		SignedPreKey:    kb.SignedPreKey,
-		SignedPreKeySig: kb.SignedPreKeySignature,
-	}
-
-	if otpk != nil {
-		resp.OneTimePreKey = &struct {
-			ID        string `json:"id"`
-			PublicKey string `json:"public_key"`
-		}{
-			ID: otpk.ID.String(), PublicKey: otpk.PublicKey,
+	for _, d := range devices {
+		var otpk *key.OneTimePreKey
+		otpk, err := s.otpkRepo.GetOneUnusedAndMarkUsed(ctx, d.ID)
+		if err != nil {
+			return nil, err
 		}
+
+		db := DeviceBundle{
+			DeviceID:              d.ID.String(),
+			IdentityKey:           d.IdentityKey,
+			SignedPreKey:          d.SignedPreKey,
+			SignedPreKeySignature: d.SignedPreKeySignature,
+		}
+
+		if otpk != nil {
+			db.OneTimePreKey = &struct {
+				ID        string `json:"id"`
+				PublicKey string `json:"public_key"`
+			}{
+				ID:        otpk.ID.String(),
+				PublicKey: otpk.PublicKey,
+			}
+		}
+
+		result.Devices = append(result.Devices, db)
 	}
 
-	return resp, nil
+	return result, nil
 }

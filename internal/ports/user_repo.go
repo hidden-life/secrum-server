@@ -15,4 +15,6 @@ type UserRepository interface {
 
 	UpdateAllowedMimeTypes(context.Context, uuid.UUID, []string) error
 	GetAllowedMimeTypes(context.Context, uuid.UUID) ([]string, error)
+
+	GetByUsername(context.Context, string) (*user.User, error)
 }

@@ -32,7 +32,8 @@ func (r *UserPGRepository) GetByID(ctx context.Context, id uuid.UUID) (*user.Use
     created_at,
     updated_at,
     is_active,
-    allowed_mime_types
+    allowed_mime_types,
+    username
 FROM users 
 WHERE id = $1`
 	row := r.pool.QueryRow(ctx, q, id)
@@ -48,6 +49,7 @@ WHERE id = $1`
 		&u.UpdatedAt,
 		&u.IsActive,
 		&u.AllowedMimeTypes,
+		&u.Username,
 	); err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
@@ -69,7 +71,8 @@ func (r *UserPGRepository) GetByPhoneHash(ctx context.Context, hash string) (*us
     created_at,
     updated_at,
     is_active,
-    allowed_mime_types
+    allowed_mime_types,
+    username
 FROM users 
 WHERE phone_hash = $1`
 	row := r.pool.QueryRow(ctx, q, hash)
@@ -85,6 +88,7 @@ WHERE phone_hash = $1`
 		&u.UpdatedAt,
 		&u.IsActive,
 		&u.AllowedMimeTypes,
+		&u.Username,
 	); err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
@@ -106,10 +110,11 @@ func (r *UserPGRepository) Create(ctx context.Context, u *user.User) error {
                    created_at, 
                    updated_at, 
                    is_active,
-                   allowed_mime_types
+                   allowed_mime_types,
+                   username
                    ) 
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
-	_, err := r.pool.Exec(ctx, q, u.ID, u.PhoneHash, u.DisplayName, u.AvatarURL, u.StatusMessage, u.SafetyFingerprint, u.CreatedAt, u.UpdatedAt, u.IsActive, u.AllowedMimeTypes)
+	_, err := r.pool.Exec(ctx, q, u.ID, u.PhoneHash, u.DisplayName, u.AvatarURL, u.StatusMessage, u.SafetyFingerprint, u.CreatedAt, u.UpdatedAt, u.IsActive, u.AllowedMimeTypes, u.Username)
 
 	return err
 }
@@ -150,4 +155,31 @@ func (r *UserPGRepository) GetAllowedMimeTypes(ctx context.Context, id uuid.UUID
 	}
 
 	return mimeTypes, nil
+}
+
+func (r *UserPGRepository) GetByUsername(ctx context.Context, username string) (*user.User, error) {
+	const q = `SELECT 
+			id, 
+			phone_hash, 
+			username, 
+			display_name,
+			avatar_url,
+			status_message,
+			safety_fingerprint,
+			created_at,
+			updated_at,
+			is_active,
+			allowed_mime_types 
+		FROM users WHERE username = $1`
+
+	row := r.pool.QueryRow(ctx, q, username)
+	var u user.User
+	if err := row.Scan(&u.ID, &u.PhoneHash, &u.Username, &u.DisplayName, &u.AvatarURL, &u.StatusMessage, &u.SafetyFingerprint, &u.CreatedAt, &u.UpdatedAt, &u.IsActive, &u.AllowedMimeTypes); err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	
+	return &u, nil
 }

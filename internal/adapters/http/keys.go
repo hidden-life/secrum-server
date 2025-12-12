@@ -5,81 +5,66 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/hidden-life/secrum-server/internal/app/keys"
-	"github.com/hidden-life/secrum-server/internal/ports"
 )
 
-func RegisterKeyRoutes(
-	r chi.Router,
-	svc *keys.Service,
-	manager ports.TokenManager,
-	store ports.SessionStore,
-	deviceRepo ports.DeviceRepository,
-) {
+func RegisterKeyRoutes(r chi.Router, svc *keys.Service) {
 	r.Route("/keys", func(r chi.Router) {
-		r.Use(AuthMiddleware(manager, store, deviceRepo))
-		r.Post("/upload", uploadHandler(svc))
-		r.Post("/fetch", fetchHandler(svc))
-
-		r.Get("/pre-key-bundle", preKeyBundleHandler(svc))
+		r.Post("/device", uploadDeviceKeys(svc))
+		r.Get("/bundle/{user_id}", getBundle(svc))
 	})
 }
 
-func fetchHandler(svc *keys.Service) http.HandlerFunc {
+func getBundle(svc *keys.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var req keys.FetchRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			asError(w, http.StatusBadRequest, "invalid request body")
+		userID := chi.URLParam(r, "user_id")
+		if userID == "" {
+			asError(w, http.StatusBadRequest, "missing user_id in request")
 			return
 		}
 
-		resp, err := svc.Fetch(r.Context(), req)
+		uid, err := uuid.Parse(userID)
+		if err != nil {
+			asError(w, http.StatusBadRequest, "invalid user_id")
+			return
+		}
+
+		bundle, err := svc.GetUserBundle(r.Context(), uid)
 		if err != nil {
 			asError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 
-		asJson(w, http.StatusOK, resp)
+		asJson(w, http.StatusOK, bundle)
 	}
 }
 
-func uploadHandler(svc *keys.Service) http.HandlerFunc {
+func uploadDeviceKeys(svc *keys.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		devID := DeviceIDFromContext(r.Context())
+		if devID == "" {
+			asError(w, http.StatusUnauthorized, "missing device_id")
+			return
+		}
+
+		deviceID, err := uuid.Parse(devID)
+		if err != nil {
+			asError(w, http.StatusBadRequest, "invalid device_id")
+			return
+		}
+
 		var req keys.UploadRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			asError(w, http.StatusBadRequest, "invalid request body")
+			asError(w, http.StatusUnauthorized, "unauthorized")
 			return
 		}
 
-		resp, err := svc.Upload(r.Context(), req)
-		if err != nil {
+		if err := svc.UploadDeviceKeys(r.Context(), deviceID, req); err != nil {
 			asError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 
-		asJson(w, http.StatusOK, resp)
-	}
-}
-
-func preKeyBundleHandler(svc *keys.Service) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		userID := r.URL.Query().Get("user_id")
-		deviceID := r.URL.Query().Get("device_id")
-		if userID == "" || deviceID == "" {
-			asError(w, http.StatusBadRequest, "invalid request body: user_id or device_id are required")
-			return
-		}
-
-		resp, err := svc.PreKeyBundle(r.Context(), &keys.PreKeyBundleRequest{
-			UserID:   userID,
-			DeviceID: deviceID,
-		})
-
-		if err != nil {
-			asError(w, http.StatusBadRequest, err.Error())
-			return
-		}
-
-		asJson(w, http.StatusOK, resp)
+		asJson(w, http.StatusNoContent, nil)
 	}
 }

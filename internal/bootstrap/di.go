@@ -20,6 +20,7 @@ import (
 	"github.com/hidden-life/secrum-server/internal/app/messages"
 	"github.com/hidden-life/secrum-server/internal/app/profile"
 	"github.com/hidden-life/secrum-server/internal/app/sync"
+	"github.com/hidden-life/secrum-server/internal/app/users"
 	"github.com/hidden-life/secrum-server/internal/config"
 	"github.com/hidden-life/secrum-server/internal/logger"
 	"github.com/hidden-life/secrum-server/internal/presence"
@@ -48,7 +49,6 @@ func InitApp(ctx context.Context, cfg *config.Config) (*App, error) {
 	}
 
 	// repositories
-	keyRepo := postgres.NewKeyRepository(pool)
 	otkpRepo := postgres.NewOTPKRepository(pool)
 	userRepo := postgres.NewUserRepository(pool)
 	deviceRepo := postgres.NewDeviceRepository(pool)
@@ -61,7 +61,7 @@ func InitApp(ctx context.Context, cfg *config.Config) (*App, error) {
 	syncRepo := postgres.NewSyncEventRepository(pool)
 
 	// services
-	keySvc := keys.NewService(log, keyRepo, otkpRepo)
+	keySvc := keys.NewService(log, deviceRepo, otkpRepo)
 
 	// redis storage
 	otpStore := internalRedis.New(rdb)
@@ -84,6 +84,7 @@ func InitApp(ctx context.Context, cfg *config.Config) (*App, error) {
 	profileSvc := profile.NewService(log, userRepo)
 	chatSvc := chats.NewService(log, msgRepo, userRepo, chatStateRepo)
 	syncSvc := sync.NewService(log, chatSvc, syncRepo)
+	searchSvc := users.NewSearchService(userRepo)
 
 	realtimeHub := real_time.NewDeliveryHub(log)
 
@@ -102,7 +103,7 @@ func InitApp(ctx context.Context, cfg *config.Config) (*App, error) {
 
 	http.RegisterHealthRoutes(router)
 	http.RegisterAuthRoutes(router, authSvc)
-	http.RegisterKeyRoutes(router, keySvc, tokenManager, sessionStore, deviceRepo)
+	http.RegisterKeyRoutes(router, keySvc)
 
 	router.Group(func(r chi.Router) {
 		r.Use(authMW)
@@ -116,6 +117,7 @@ func InitApp(ctx context.Context, cfg *config.Config) (*App, error) {
 		http.RegisterAttachmentsRoutes(r, attachmentsSvc)
 		http.RegisterSyncEventRoutes(r, syncSvc)
 		http.RegisterWSRoutes(r, log, realtimeHub, msgSvc, presenceSvc)
+		http.RegisterUserSearchRoutes(r, searchSvc)
 	})
 
 	return &App{
