@@ -24,27 +24,22 @@ func AuthMiddleware(t ports.TokenManager, store ports.SessionStore, deviceRepo p
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			fmt.Println("AUTH MIDDLEWARE: ", r.Method, r.URL.Path)
 			fmt.Println("AUTH HEADER = ", r.Header.Get("Authorization"))
-			authHeader := r.Header.Get("Authorization")
-			if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
-				asError(w, http.StatusUnauthorized, "missing or invalid bearer token")
-				return
-			}
 
 			token := ""
 
 			// search in header
 			header := r.Header.Get("Authorization")
 			if strings.HasPrefix(header, "Bearer ") {
-				token = strings.TrimPrefix(header, "Bearer ")
+				token = strings.TrimSpace(strings.TrimPrefix(header, "Bearer "))
 			}
 
 			// search in query (for WS)
 			if token == "" {
-				token = r.URL.Query().Get("access_token")
+				token = strings.TrimSpace(r.URL.Query().Get("access_token"))
 			}
 
 			if token == "" {
-				asError(w, http.StatusUnauthorized, "unauthorized")
+				asError(w, http.StatusUnauthorized, "unauthorized: missing bearer token")
 				return
 			}
 
