@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
+	"github.com/hidden-life/secrum-server/internal/adapters/http"
+	"github.com/hidden-life/secrum-server/internal/adapters/redis"
 	"github.com/hidden-life/secrum-server/internal/domain/user"
 	"github.com/hidden-life/secrum-server/internal/ports"
 )
@@ -29,8 +31,14 @@ func (s *SearchService) Search(ctx context.Context, query string) (*SearchResult
 		return nil, nil
 	}
 
+	currentUserID := http.UserIDFromContext(ctx)
+
 	// UUID
 	if id, err := uuid.Parse(query); err == nil {
+		if id.String() == currentUserID { // prevent to search current user :)
+			return nil, nil
+		}
+
 		u, err := s.userRepo.GetByID(ctx, id)
 		if err != nil || u == nil {
 			return nil, err
@@ -55,12 +63,24 @@ func (s *SearchService) Search(ctx context.Context, query string) (*SearchResult
 	}
 
 	// phone hash
-	u, err := s.userRepo.GetByPhoneHash(ctx, query)
-	if err != nil || u == nil {
-		return nil, err
+	//u, err := s.userRepo.GetByPhoneHash(ctx, query)
+	//if err != nil || u == nil {
+	//	return nil, err
+	//}
+	candidates := phoneCandidates(query)
+	for _, p := range candidates {
+		h := redis.Hasher(p)
+		u, err := s.userRepo.GetByPhoneHash(ctx, h)
+		if err != nil {
+			continue
+		}
+
+		if u != nil {
+			return buildResult(u), nil
+		}
 	}
 
-	return buildResult(u), nil
+	return nil, nil
 }
 
 func buildResult(u *user.User) *SearchResult {
@@ -74,4 +94,63 @@ func buildResult(u *user.User) *SearchResult {
 		DisplayName: name,
 		Username:    u.Username,
 	}
+}
+
+func phoneCandidates(input string) []string {
+	s := strings.TrimSpace(input)
+	if s == "" {
+		return nil
+	}
+
+	// leave only + and digits
+	b := strings.Builder{}
+	b.Grow(len(s))
+	for _, r := range s {
+		if r >= '0' && r <= '9' {
+			b.WriteRune(r)
+			continue
+		}
+
+		if r == '+' && b.Len() == 0 {
+			b.WriteRune(r)
+		}
+	}
+
+	s = b.String()
+	if s == "" {
+		return nil
+	}
+
+	if strings.HasPrefix(s, "00") {
+		s = "+" + strings.TrimPrefix(s, "00")
+	}
+
+	unique := make(map[string]struct{})
+	add := func(x string) {
+		x = strings.TrimSpace(x)
+		if x == "" {
+			return
+		}
+
+		if _, ok := unique[x]; ok {
+			return
+		}
+
+		unique[x] = struct{}{}
+	}
+
+	add(s)
+
+	if !strings.HasPrefix(s, "+") {
+		add("+" + s)
+	} else {
+		add(strings.TrimPrefix(s, "+"))
+	}
+
+	out := make([]string, 0, len(unique))
+	for k := range unique {
+		out = append(out, k)
+	}
+
+	return out
 }

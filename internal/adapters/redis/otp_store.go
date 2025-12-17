@@ -33,8 +33,8 @@ func (s *OTPStoreRedis) SaveChallenge(ctx context.Context, phone, code string) (
 	key := otpKeyPrefix + requestID
 
 	fields := map[string]interface{}{
-		"phone_hash": hash(phone),
-		"code_hash":  hash(code),
+		"phone_hash": Hasher(phone),
+		"code_hash":  Hasher(code),
 		"attempts":   0,
 	}
 
@@ -80,7 +80,7 @@ func (s *OTPStoreRedis) VerifyAndConsume(ctx context.Context, requestID, code st
 		return "", false, nil // Not found
 	}
 
-	if values["code_hash"] != hash(code) {
+	if values["code_hash"] != Hasher(code) {
 		return "", false, nil // Incorrect code
 	}
 
@@ -90,7 +90,8 @@ func (s *OTPStoreRedis) VerifyAndConsume(ctx context.Context, requestID, code st
 	return phoneHash, true, nil
 }
 
-func hash(s string) string {
+// Hasher... @todo: move to another layer
+func Hasher(s string) string {
 	sum := sha256.Sum256([]byte(s))
 	return hex.EncodeToString(sum[:])
 }

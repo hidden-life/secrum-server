@@ -113,7 +113,7 @@ func (r *UserPGRepository) Create(ctx context.Context, u *user.User) error {
                    allowed_mime_types,
                    username
                    ) 
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`
 	_, err := r.pool.Exec(ctx, q, u.ID, u.PhoneHash, u.DisplayName, u.AvatarURL, u.StatusMessage, u.SafetyFingerprint, u.CreatedAt, u.UpdatedAt, u.IsActive, u.AllowedMimeTypes, u.Username)
 
 	return err
@@ -180,6 +180,6 @@ func (r *UserPGRepository) GetByUsername(ctx context.Context, username string) (
 		}
 		return nil, err
 	}
-	
+
 	return &u, nil
 }
