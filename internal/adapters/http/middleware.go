@@ -93,19 +93,3 @@ func AuthMiddleware(t ports.TokenManager, store ports.SessionStore, deviceRepo p
 		})
 	}
 }
-
-func UserIDFromContext(ctx context.Context) string {
-	if v, ok := ctx.Value(ctxUserIDKey).(string); ok {
-		return v
-	}
-
-	return ""
-}
-
-func DeviceIDFromContext(ctx context.Context) string {
-	if v, ok := ctx.Value(ctxDeviceIDKey).(string); ok {
-		return v
-	}
-
-	return ""
-}

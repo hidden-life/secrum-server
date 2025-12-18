@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	app_context "github.com/hidden-life/secrum-server/internal/app/context"
 	"github.com/hidden-life/secrum-server/internal/app/messages"
 	"github.com/hidden-life/secrum-server/internal/presence"
 	"github.com/hidden-life/secrum-server/internal/real_time"
@@ -60,8 +61,8 @@ func wsHandler(
 	presenceSvc *presence.Service,
 ) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID := UserIDFromContext(r.Context())
-		deviceID := DeviceIDFromContext(r.Context())
+		userID := app_context.UserIDFromContext(r.Context())
+		deviceID := app_context.DeviceIDFromContext(r.Context())
 		if userID == "" || deviceID == "" {
 			asError(w, http.StatusUnauthorized, "unauthorized")
 			return

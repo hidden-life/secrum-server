@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/hidden-life/secrum-server/internal/app/attachments"
+	"github.com/hidden-life/secrum-server/internal/app/context"
 )
 
 func RegisterAttachmentsRoutes(r chi.Router, svc *attachments.Service) {
@@ -18,7 +19,7 @@ func RegisterAttachmentsRoutes(r chi.Router, svc *attachments.Service) {
 
 func uploadAttachmentHandler(svc *attachments.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID := UserIDFromContext(r.Context())
+		userID := context.UserIDFromContext(r.Context())
 		if userID == "" {
 			asError(w, http.StatusUnauthorized, "unauthorized")
 			return
@@ -51,7 +52,7 @@ func uploadAttachmentHandler(svc *attachments.Service) http.HandlerFunc {
 
 func downloadAttachmentHandler(svc *attachments.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID := UserIDFromContext(r.Context())
+		userID := context.UserIDFromContext(r.Context())
 		if userID == "" {
 			asError(w, http.StatusUnauthorized, "unauthorized")
 			return

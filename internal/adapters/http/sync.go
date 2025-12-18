@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/hidden-life/secrum-server/internal/app/context"
 	"github.com/hidden-life/secrum-server/internal/app/sync"
 )
 
@@ -17,7 +18,7 @@ func RegisterSyncEventRoutes(r chi.Router, svc *sync.Service) {
 
 func fullSync(svc *sync.Service) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID := UserIDFromContext(r.Context())
+		userID := context.UserIDFromContext(r.Context())
 		if userID == "" {
 			asError(w, http.StatusUnauthorized, "unauthorized")
 			return
@@ -35,7 +36,7 @@ func fullSync(svc *sync.Service) func(w http.ResponseWriter, r *http.Request) {
 
 func deltaSync(svc *sync.Service) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID := UserIDFromContext(r.Context())
+		userID := context.UserIDFromContext(r.Context())
 		if userID == "" {
 			asError(w, http.StatusUnauthorized, "unauthorized")
 			return

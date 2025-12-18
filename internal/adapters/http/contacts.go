@@ -7,6 +7,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/hidden-life/secrum-server/internal/app/contact"
+	"github.com/hidden-life/secrum-server/internal/app/context"
 )
 
 func RegisterContactRoutes(r chi.Router, svc *contact.Service) {
@@ -18,7 +19,7 @@ func RegisterContactRoutes(r chi.Router, svc *contact.Service) {
 
 func contactsListHandler(svc *contact.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ownerStr := UserIDFromContext(r.Context())
+		ownerStr := context.UserIDFromContext(r.Context())
 		if ownerStr == "" {
 			asError(w, http.StatusUnauthorized, "unauthorized")
 			return
@@ -38,7 +39,7 @@ func contactsListHandler(svc *contact.Service) http.HandlerFunc {
 
 func removeContactHandler(svc *contact.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ownerStr := UserIDFromContext(r.Context())
+		ownerStr := context.UserIDFromContext(r.Context())
 		if ownerStr == "" {
 			asError(w, http.StatusUnauthorized, "unauthorized")
 			return
@@ -63,7 +64,7 @@ func removeContactHandler(svc *contact.Service) http.HandlerFunc {
 
 func syncContactsHandler(svc *contact.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ownerStr := UserIDFromContext(r.Context())
+		ownerStr := context.UserIDFromContext(r.Context())
 		if ownerStr == "" {
 			asError(w, http.StatusUnauthorized, "unauthorized")
 			return
@@ -87,7 +88,7 @@ func syncContactsHandler(svc *contact.Service) http.HandlerFunc {
 
 func addContactHandler(svc *contact.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		ownerStr := UserIDFromContext(r.Context())
+		ownerStr := context.UserIDFromContext(r.Context())
 		if ownerStr == "" {
 			asError(w, http.StatusUnauthorized, "unauthorized")
 			return

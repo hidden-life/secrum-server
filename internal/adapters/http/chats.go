@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/hidden-life/secrum-server/internal/app/chats"
+	app_context "github.com/hidden-life/secrum-server/internal/app/context"
 )
 
 func RegisterChatRoutes(r chi.Router, svc *chats.Service) {
@@ -25,7 +26,7 @@ func RegisterChatRoutes(r chi.Router, svc *chats.Service) {
 
 func chatsListHandler(svc *chats.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID := UserIDFromContext(r.Context())
+		userID := app_context.UserIDFromContext(r.Context())
 		if userID == "" {
 			asError(w, http.StatusUnauthorized, "unauthorized")
 			return
@@ -67,7 +68,7 @@ func unMuteChat(svc *chats.Service) http.HandlerFunc {
 
 func chatStateWrapper(fn func(context.Context, string, string, bool) error, val bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID := UserIDFromContext(r.Context())
+		userID := app_context.UserIDFromContext(r.Context())
 		peerID := chi.URLParam(r, "peer_id")
 		if peerID == "" || peerID == "" {
 			asError(w, http.StatusUnauthorized, "unauthorized")

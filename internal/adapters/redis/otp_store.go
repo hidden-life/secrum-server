@@ -2,11 +2,10 @@ package redis
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/hidden-life/secrum-server/internal/domain/crypto"
 	"github.com/hidden-life/secrum-server/internal/ports"
 	"github.com/redis/go-redis/v9"
 )
@@ -33,8 +32,8 @@ func (s *OTPStoreRedis) SaveChallenge(ctx context.Context, phone, code string) (
 	key := otpKeyPrefix + requestID
 
 	fields := map[string]interface{}{
-		"phone_hash": Hasher(phone),
-		"code_hash":  Hasher(code),
+		"phone_hash": crypto.Hasher(phone),
+		"code_hash":  crypto.Hasher(code),
 		"attempts":   0,
 	}
 
@@ -80,7 +79,7 @@ func (s *OTPStoreRedis) VerifyAndConsume(ctx context.Context, requestID, code st
 		return "", false, nil // Not found
 	}
 
-	if values["code_hash"] != Hasher(code) {
+	if values["code_hash"] != crypto.Hasher(code) {
 		return "", false, nil // Incorrect code
 	}
 
@@ -88,10 +87,4 @@ func (s *OTPStoreRedis) VerifyAndConsume(ctx context.Context, requestID, code st
 	_ = s.rdb.Del(ctx, key).Err() // Consume OTP
 
 	return phoneHash, true, nil
-}
-
-// Hasher... @todo: move to another layer
-func Hasher(s string) string {
-	sum := sha256.Sum256([]byte(s))
-	return hex.EncodeToString(sum[:])
 }

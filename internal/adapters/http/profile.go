@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/hidden-life/secrum-server/internal/app/context"
 	"github.com/hidden-life/secrum-server/internal/app/profile"
 )
 
@@ -35,7 +36,7 @@ func getUserSafetyHandler(svc *profile.Service) http.HandlerFunc {
 
 func updateProfileHandler(svc *profile.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		uid := UserIDFromContext(r.Context())
+		uid := context.UserIDFromContext(r.Context())
 		if uid == "" {
 			asError(w, http.StatusBadRequest, "unauthorized")
 			return
@@ -59,7 +60,7 @@ func updateProfileHandler(svc *profile.Service) http.HandlerFunc {
 
 func getMeHandler(svc *profile.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		uid := UserIDFromContext(r.Context())
+		uid := context.UserIDFromContext(r.Context())
 		if uid == "" {
 			asError(w, http.StatusBadRequest, "unauthorized")
 			return

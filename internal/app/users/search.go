@@ -5,8 +5,8 @@ import (
 	"strings"
 
 	"github.com/google/uuid"
-	"github.com/hidden-life/secrum-server/internal/adapters/http"
-	"github.com/hidden-life/secrum-server/internal/adapters/redis"
+	app_context "github.com/hidden-life/secrum-server/internal/app/context"
+	"github.com/hidden-life/secrum-server/internal/domain/crypto"
 	"github.com/hidden-life/secrum-server/internal/domain/user"
 	"github.com/hidden-life/secrum-server/internal/ports"
 )
@@ -31,7 +31,7 @@ func (s *SearchService) Search(ctx context.Context, query string) (*SearchResult
 		return nil, nil
 	}
 
-	currentUserID := http.UserIDFromContext(ctx)
+	currentUserID := app_context.UserIDFromContext(ctx)
 
 	// UUID
 	if id, err := uuid.Parse(query); err == nil {
@@ -69,7 +69,7 @@ func (s *SearchService) Search(ctx context.Context, query string) (*SearchResult
 	//}
 	candidates := phoneCandidates(query)
 	for _, p := range candidates {
-		h := redis.Hasher(p)
+		h := crypto.Hasher(p)
 		u, err := s.userRepo.GetByPhoneHash(ctx, h)
 		if err != nil {
 			continue

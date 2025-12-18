@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/hidden-life/secrum-server/internal/app/context"
 	"github.com/hidden-life/secrum-server/internal/app/groups"
 	"github.com/hidden-life/secrum-server/internal/app/messages"
 )
@@ -25,7 +26,7 @@ func RegisterGroupsRoutes(r chi.Router, svc *groups.Service, msgSvc *messages.Se
 
 func fetchGroupMessages(groupSvc *groups.Service, msgSvc *messages.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID := UserIDFromContext(r.Context())
+		userID := context.UserIDFromContext(r.Context())
 		if userID == "" {
 			asError(w, http.StatusUnauthorized, "unauthorized")
 			return
@@ -72,8 +73,8 @@ func fetchGroupMessages(groupSvc *groups.Service, msgSvc *messages.Service) http
 
 func sendGroupMessages(svc *groups.Service, msgSvc *messages.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID := UserIDFromContext(r.Context())
-		deviceID := DeviceIDFromContext(r.Context())
+		userID := context.UserIDFromContext(r.Context())
+		deviceID := context.DeviceIDFromContext(r.Context())
 		if userID == "" || deviceID == "" {
 			asError(w, http.StatusUnauthorized, "unauthorized (missing user or device)")
 			return
@@ -110,7 +111,7 @@ func sendGroupMessages(svc *groups.Service, msgSvc *messages.Service) http.Handl
 
 func removeGroupMember(svc *groups.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		actorUserID := UserIDFromContext(r.Context())
+		actorUserID := context.UserIDFromContext(r.Context())
 		if actorUserID == "" {
 			asError(w, http.StatusUnauthorized, "unauthorized")
 			return
@@ -137,7 +138,7 @@ func removeGroupMember(svc *groups.Service) http.HandlerFunc {
 
 func addGroupMember(svc *groups.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		actorUserID := UserIDFromContext(r.Context())
+		actorUserID := context.UserIDFromContext(r.Context())
 		if actorUserID == "" {
 			asError(w, http.StatusUnauthorized, "unauthorized")
 			return
@@ -171,7 +172,7 @@ func addGroupMember(svc *groups.Service) http.HandlerFunc {
 
 func groupMembersList(svc *groups.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID := UserIDFromContext(r.Context())
+		userID := context.UserIDFromContext(r.Context())
 		if userID == "" {
 			asError(w, http.StatusUnauthorized, "unauthorized")
 			return
@@ -195,7 +196,7 @@ func groupMembersList(svc *groups.Service) http.HandlerFunc {
 
 func listGroupsHandler(svc *groups.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID := UserIDFromContext(r.Context())
+		userID := context.UserIDFromContext(r.Context())
 		if userID == "" {
 			asError(w, http.StatusUnauthorized, "unauthorized")
 			return
@@ -213,7 +214,7 @@ func listGroupsHandler(svc *groups.Service) http.HandlerFunc {
 
 func createGroupHandler(svc *groups.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID := UserIDFromContext(r.Context())
+		userID := context.UserIDFromContext(r.Context())
 		if userID == "" {
 			asError(w, http.StatusUnauthorized, "unauthorized")
 			return

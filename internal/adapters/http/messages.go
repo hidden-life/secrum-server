@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/hidden-life/secrum-server/internal/app/context"
 	"github.com/hidden-life/secrum-server/internal/app/messages"
 )
 
@@ -33,7 +34,7 @@ func RegisterMessagesRoutes(r chi.Router, svc *messages.Service) {
 
 func getChatHistoryHandler(svc *messages.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID := UserIDFromContext(r.Context())
+		userID := context.UserIDFromContext(r.Context())
 		if userID == "" {
 			asError(w, http.StatusUnauthorized, "unauthorized")
 			return
@@ -69,7 +70,7 @@ func getChatHistoryHandler(svc *messages.Service) http.HandlerFunc {
 
 func ackHandler(svc *messages.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		devID := DeviceIDFromContext(r.Context())
+		devID := context.DeviceIDFromContext(r.Context())
 		if devID == "" {
 			asError(w, http.StatusUnauthorized, "unauthorized")
 			return
@@ -92,7 +93,7 @@ func ackHandler(svc *messages.Service) http.HandlerFunc {
 
 func pendingHandler(svc *messages.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		devID := DeviceIDFromContext(r.Context())
+		devID := context.DeviceIDFromContext(r.Context())
 		if devID == "" {
 			asError(w, http.StatusUnauthorized, "unauthorized")
 			return
@@ -118,8 +119,8 @@ func pendingHandler(svc *messages.Service) http.HandlerFunc {
 
 func sendHandler(svc *messages.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		senderUID := UserIDFromContext(r.Context())
-		senderDevID := DeviceIDFromContext(r.Context())
+		senderUID := context.UserIDFromContext(r.Context())
+		senderDevID := context.DeviceIDFromContext(r.Context())
 		if senderDevID == "" || senderUID == "" {
 			asError(w, http.StatusUnauthorized, "unauthorized")
 			return
@@ -143,7 +144,7 @@ func sendHandler(svc *messages.Service) http.HandlerFunc {
 
 func deleteForMe(svc *messages.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID := UserIDFromContext(r.Context())
+		userID := context.UserIDFromContext(r.Context())
 		if userID == "" {
 			asError(w, http.StatusUnauthorized, "unauthorized")
 			return
@@ -161,7 +162,7 @@ func deleteForMe(svc *messages.Service) http.HandlerFunc {
 
 func deleteForAll(svc *messages.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID := UserIDFromContext(r.Context())
+		userID := context.UserIDFromContext(r.Context())
 		if userID == "" {
 			asError(w, http.StatusUnauthorized, "unauthorized")
 			return
@@ -179,7 +180,7 @@ func deleteForAll(svc *messages.Service) http.HandlerFunc {
 
 func edit(svc *messages.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID := UserIDFromContext(r.Context())
+		userID := context.UserIDFromContext(r.Context())
 		if userID == "" {
 			asError(w, http.StatusUnauthorized, "unauthorized")
 			return
@@ -203,7 +204,7 @@ func edit(svc *messages.Service) http.HandlerFunc {
 
 func addReaction(svc *messages.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID := UserIDFromContext(r.Context())
+		userID := context.UserIDFromContext(r.Context())
 		if userID == "" {
 			asError(w, http.StatusUnauthorized, "unauthorized")
 			return
@@ -230,7 +231,7 @@ func addReaction(svc *messages.Service) http.HandlerFunc {
 
 func removeReaction(svc *messages.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID := UserIDFromContext(r.Context())
+		userID := context.UserIDFromContext(r.Context())
 		if userID == "" {
 			asError(w, http.StatusUnauthorized, "unauthorized")
 			return
@@ -248,7 +249,7 @@ func removeReaction(svc *messages.Service) http.HandlerFunc {
 
 func searchMessages(svc *messages.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID := UserIDFromContext(r.Context())
+		userID := context.UserIDFromContext(r.Context())
 		if userID == "" {
 			asError(w, http.StatusUnauthorized, "unauthorized")
 			return
@@ -284,7 +285,7 @@ func searchMessages(svc *messages.Service) http.HandlerFunc {
 
 func pinMessage(svc *messages.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID := UserIDFromContext(r.Context())
+		userID := context.UserIDFromContext(r.Context())
 		if userID == "" {
 			asError(w, http.StatusUnauthorized, "unauthorized")
 			return
@@ -301,7 +302,7 @@ func pinMessage(svc *messages.Service) http.HandlerFunc {
 
 func unpinMessage(svc *messages.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID := UserIDFromContext(r.Context())
+		userID := context.UserIDFromContext(r.Context())
 		if userID == "" {
 			asError(w, http.StatusUnauthorized, "unauthorized")
 			return
@@ -318,13 +319,13 @@ func unpinMessage(svc *messages.Service) http.HandlerFunc {
 
 func forwardToUser(svc *messages.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		actorID := UserIDFromContext(r.Context())
+		actorID := context.UserIDFromContext(r.Context())
 		if actorID == "" {
 			asError(w, http.StatusUnauthorized, "unauthorized")
 			return
 		}
 
-		deviceID := DeviceIDFromContext(r.Context())
+		deviceID := context.DeviceIDFromContext(r.Context())
 		if deviceID == "" {
 			asError(w, http.StatusUnauthorized, "unauthorized")
 			return

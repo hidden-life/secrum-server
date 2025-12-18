@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/hidden-life/secrum-server/internal/app/context"
 	"github.com/hidden-life/secrum-server/internal/app/keys"
 )
 
@@ -42,7 +43,7 @@ func getBundle(svc *keys.Service) http.HandlerFunc {
 
 func uploadDeviceKeys(svc *keys.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		devID := DeviceIDFromContext(r.Context())
+		devID := context.DeviceIDFromContext(r.Context())
 		if devID == "" {
 			asError(w, http.StatusUnauthorized, "missing device_id")
 			return

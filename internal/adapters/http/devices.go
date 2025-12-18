@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/hidden-life/secrum-server/internal/app/context"
 	"github.com/hidden-life/secrum-server/internal/app/devices"
 )
 
@@ -17,12 +18,12 @@ func RegisterDevicesRoutes(r chi.Router, svc *devices.Service) {
 
 func deleteDeviceHandler(svc *devices.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID := UserIDFromContext(r.Context())
+		userID := context.UserIDFromContext(r.Context())
 		if userID == "" {
 			asError(w, http.StatusUnauthorized, "missing user id in context")
 			return
 		}
-		currentDeviceID := DeviceIDFromContext(r.Context())
+		currentDeviceID := context.DeviceIDFromContext(r.Context())
 		deviceID := chi.URLParam(r, "device_id")
 		if deviceID == "" {
 			asError(w, http.StatusBadRequest, "missing device id")
@@ -40,12 +41,12 @@ func deleteDeviceHandler(svc *devices.Service) http.HandlerFunc {
 
 func deactivateDeviceHandler(svc *devices.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID := UserIDFromContext(r.Context())
+		userID := context.UserIDFromContext(r.Context())
 		if userID == "" {
 			asError(w, http.StatusUnauthorized, "missing user id in context")
 			return
 		}
-		currentDeviceID := DeviceIDFromContext(r.Context())
+		currentDeviceID := context.DeviceIDFromContext(r.Context())
 		deviceID := chi.URLParam(r, "device_id")
 		if deviceID == "" {
 			asError(w, http.StatusBadRequest, "missing deviceID")
@@ -63,13 +64,13 @@ func deactivateDeviceHandler(svc *devices.Service) http.HandlerFunc {
 
 func listDevicesHandler(svc *devices.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID := UserIDFromContext(r.Context())
+		userID := context.UserIDFromContext(r.Context())
 		if userID == "" {
 			asError(w, http.StatusUnauthorized, "missing user id in context")
 			return
 		}
 
-		currentDeviceID := DeviceIDFromContext(r.Context())
+		currentDeviceID := context.DeviceIDFromContext(r.Context())
 		if currentDeviceID == "" {
 			asError(w, http.StatusBadRequest, "missing device id in context")
 		}
