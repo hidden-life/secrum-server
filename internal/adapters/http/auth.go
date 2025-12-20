@@ -6,6 +6,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/hidden-life/secrum-server/internal/app/auth"
+	"github.com/hidden-life/secrum-server/internal/app/context"
 )
 
 func RegisterAuthRoutes(r chi.Router, svc *auth.Service) {
@@ -13,7 +14,25 @@ func RegisterAuthRoutes(r chi.Router, svc *auth.Service) {
 		r.Post("/begin", beginHandler(svc))
 		r.Post("/verify", verifyHandler(svc))
 		r.Post("/refresh", refreshHandler(svc))
+		r.Post("/logout", logoutHandler(svc))
 	})
+}
+
+func logoutHandler(svc *auth.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		deviceID := context.DeviceIDFromContext(r.Context())
+		if deviceID == "" {
+			asError(w, http.StatusUnauthorized, "unauthorized")
+			return
+		}
+
+		if err := svc.Logout(r.Context(), deviceID); err != nil {
+			asError(w, http.StatusBadRequest, err.Error())
+			return
+		}
+
+		asJson(w, http.StatusOK, nil)
+	}
 }
 
 func refreshHandler(svc *auth.Service) http.HandlerFunc {

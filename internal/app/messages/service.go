@@ -37,7 +37,7 @@ type MediaMetadata struct {
 // SendRequest is input for sending message
 type SendRequest struct {
 	RecipientUserID   string  `json:"recipient_user_id"`
-	RecipientDeviceID string  `json:"recipient_device_id"`
+	RecipientDeviceID string  `json:"recipient_device_id,omitempty"`
 	CipherText        string  `json:"cipher_text"`
 	X3DHOTPKID        *string `json:"x3dh_otpk_id,omitempty"`
 	PubKey            *string `json:"pub_key,omitempty"`

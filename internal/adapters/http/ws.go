@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
-	app_context "github.com/hidden-life/secrum-server/internal/app/context"
 	"github.com/hidden-life/secrum-server/internal/app/messages"
+	"github.com/hidden-life/secrum-server/internal/ports"
 	"github.com/hidden-life/secrum-server/internal/presence"
 	"github.com/hidden-life/secrum-server/internal/real_time"
 	"go.uber.org/zap"
@@ -44,12 +45,18 @@ func (JSONCodec) Decode(data []byte, v any) error {
 	return json.Unmarshal(data, v)
 }
 
-func RegisterWSRoutes(r chi.Router, log *zap.Logger, hub *real_time.DeliveryHub, msgSvc *messages.Service, presenceSvc *presence.Service) {
+func RegisterWSRoutes(
+	r chi.Router,
+	log *zap.Logger,
+	hub *real_time.DeliveryHub,
+	msgSvc *messages.Service,
+	presenceSvc *presence.Service,
+	tokenManager ports.TokenManager) {
 	codec := JSONCodec{} // now JSON, but in future it will be easy to change
 
 	r.Group(func(r chi.Router) {
 		// use auth middleware
-		r.Get("/ws", wsHandler(log, hub, msgSvc, codec, presenceSvc))
+		r.Get("/ws", wsHandler(log, hub, msgSvc, codec, presenceSvc, tokenManager))
 	})
 }
 
@@ -59,10 +66,21 @@ func wsHandler(
 	msgSvc *messages.Service,
 	codec WSCodec,
 	presenceSvc *presence.Service,
+	tokenManager ports.TokenManager,
 ) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		userID := app_context.UserIDFromContext(r.Context())
-		deviceID := app_context.DeviceIDFromContext(r.Context())
+		accessToken := strings.TrimSpace(r.URL.Query().Get("access_token"))
+		if accessToken == "" {
+			asError(w, http.StatusUnauthorized, "access_token is required")
+			return
+		}
+
+		userID, deviceID, err := tokenManager.ValidateAccess(r.Context(), accessToken)
+		if err != nil {
+			asError(w, http.StatusUnauthorized, err.Error())
+			return
+		}
+
 		if userID == "" || deviceID == "" {
 			asError(w, http.StatusUnauthorized, "unauthorized")
 			return

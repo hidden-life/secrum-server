@@ -1,6 +1,8 @@
 package context
 
+type Key string
+
 const (
-	UserIDCtxKey   = "user_id"
-	DeviceIDCtxKey = "device_id"
+	UserIDCtxKey   Key = "user_id"
+	DeviceIDCtxKey Key = "device_id"
 )

@@ -8,15 +8,11 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	app_context "github.com/hidden-life/secrum-server/internal/app/context"
 	"github.com/hidden-life/secrum-server/internal/ports"
 )
 
 type ctxKey string
-
-const (
-	ctxUserIDKey   ctxKey = "user_id"
-	ctxDeviceIDKey ctxKey = "device_id"
-)
 
 // AuthMiddleware validates Bearer access token and injects user/device IDs into context.
 func AuthMiddleware(t ports.TokenManager, store ports.SessionStore, deviceRepo ports.DeviceRepository) func(http.Handler) http.Handler {
@@ -86,8 +82,8 @@ func AuthMiddleware(t ports.TokenManager, store ports.SessionStore, deviceRepo p
 				_ = deviceRepo.UpdateLastSeen(context.Background(), devUUID, time.Now().UTC())
 			}()
 
-			ctx := context.WithValue(r.Context(), ctxUserIDKey, userID)
-			ctx = context.WithValue(ctx, ctxDeviceIDKey, deviceID)
+			ctx := context.WithValue(r.Context(), app_context.UserIDCtxKey, userID)
+			ctx = context.WithValue(ctx, app_context.DeviceIDCtxKey, deviceID)
 
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})

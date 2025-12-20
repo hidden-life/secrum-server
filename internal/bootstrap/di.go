@@ -104,6 +104,14 @@ func InitApp(ctx context.Context, cfg *config.Config) (*App, error) {
 	http.RegisterHealthRoutes(router)
 	http.RegisterAuthRoutes(router, authSvc)
 	http.RegisterKeyRoutes(router, keySvc)
+	http.RegisterWSRoutes(
+		router,
+		log,
+		realtimeHub,
+		msgSvc,
+		presenceSvc,
+		tokenManager,
+	)
 
 	router.Group(func(r chi.Router) {
 		r.Use(authMW)
@@ -116,7 +124,6 @@ func InitApp(ctx context.Context, cfg *config.Config) (*App, error) {
 		http.RegisterGroupsRoutes(r, groupSvc, msgSvc)
 		http.RegisterAttachmentsRoutes(r, attachmentsSvc)
 		http.RegisterSyncEventRoutes(r, syncSvc)
-		http.RegisterWSRoutes(r, log, realtimeHub, msgSvc, presenceSvc)
 		http.RegisterUserSearchRoutes(r, searchSvc)
 	})
 
